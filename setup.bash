@@ -57,7 +57,7 @@ mine_project() {
             if echo $file | grep --quiet ' => '
             then
                 # is file rename
-                read old_file new_file <<< $(echo $file | perl -pe 's|(.*){(.*?) => (.*?)}(.*)|\1\2\4 \1\3\4|') 
+                read old_file new_file <<< $(echo $file | perl -pe 's|(.*){(.*?) => (.*?)}(.*)|\1\2\4 \1\3\4|')
                 for renamed_file in $old_file $new_file
                 do
                     ensure_author_project_file_changes "$author" "$project_id" "$renamed_file"
@@ -111,8 +111,8 @@ else
     wget -O $INITIAL_DATABASE_PATH $DATABASE_DOWNLOAD_LINK
 fi
 
-# copy database for modification
-cp $INITIAL_DATABASE_PATH $DATABASE_PATH
+# copy database for modification (if not already present)
+cp --update $INITIAL_DATABASE_PATH $DATABASE_PATH
 
 # clone git projects
 mkdir -p $PROJECTS_DIR
@@ -135,7 +135,39 @@ run_query 'SELECT project_id, git_link from PROJECTS;' | (
     wait $(jobs -p)
 )
 
-# UNCOMMENT TO GENERATE AUXILLARY TABLES
+# Create the table 'COMMIT_TIME_DIFFS' from 'SONAR_ISSUES', 'SONAR_ANALYSIS',
+# and 'GIT_COMMITS'.
+run_query '
+    CREATE TABLE IF NOT EXISTS COMMIT_TIME_DIFFS AS
+        SELECT SONAR_ISSUES.ISSUE_KEY,
+               SONAR_ISSUES.RULE,
+               SONAR_ISSUES.CREATION_ANALYSIS_KEY,
+               SONAR_ISSUES.CLOSE_ANALYSIS_KEY,
+               SONAR_ISSUES.CREATION_DATE,
+               SONAR_ISSUES.CLOSE_DATE,
+               SONAR_ISSUES.TYPE,
+               CAST((julianday(SONAR_ISSUES.CLOSE_DATE) - julianday(SONAR_ISSUES.CREATION_DATE)) AS INTEGER)      AS DAY_DIFF,
+               CAST((julianday(SONAR_ISSUES.CLOSE_DATE) - julianday(SONAR_ISSUES.CREATION_DATE)) * 24 AS INTEGER) AS HOURS_DIFF,
+               CREATION_ANALYSIS.REVISION                                                                         AS CREATION_COMMIT_HASH,
+               CLOSE_ANALYSIS.REVISION                                                                            AS CLOSE_COMMIT_HASH,
+               CREATION_COMMITS.AUTHOR                                                                            AS CREATION_AUTHOR,
+               FIX_COMMITS.AUTHOR                                                                                 AS FIX_AUTHOR
+          FROM SONAR_ISSUES
+    INNER JOIN SONAR_ANALYSIS CREATION_ANALYSIS
+            ON CREATION_ANALYSIS_KEY      = CREATION_ANALYSIS.ANALYSIS_KEY
+    INNER JOIN GIT_COMMITS    CREATION_COMMITS
+            ON CREATION_ANALYSIS.REVISION = CREATION_COMMITS.COMMIT_HASH
+    INNER JOIN SONAR_ANALYSIS CLOSE_ANALYSIS
+            ON CLOSE_ANALYSIS_KEY         = CLOSE_ANALYSIS.ANALYSIS_KEY
+    INNER JOIN GIT_COMMITS    FIX_COMMITS
+            ON CLOSE_ANALYSIS.REVISION    = FIX_COMMITS.COMMIT_HASH
+         WHERE SONAR_ISSUES.CLOSE_DATE != ""           AND
+               SONAR_ISSUES.TYPE       =  "CODE_SMELL" AND
+               (SONAR_ISSUES.RULE =    "common-java" OR
+                SONAR_ISSUES.RULE LIKE "squid:%");
+'
+
+# UNCOMMENT TO GENERATE REMAINING TABLES
 # --------------------------------------
 # build AUTHOR_PROJECT_COMMITS and AUTHOR_PROJECT_FILE_CHANGES
 # run_query '
@@ -145,7 +177,7 @@ run_query 'SELECT project_id, git_link from PROJECTS;' | (
 #         COMMITS    INTEGER NOT NULL,
 #         PRIMARY KEY (AUTHOR, PROJECT_ID)
 #     );
-# 
+#
 #     CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_FILE_CHANGES (
 #         AUTHOR             TEXT              NOT NULL,
 #         PROJECT_ID         TEXT              NOT NULL,
