@@ -2,28 +2,31 @@
 
 # use strict mode
 set -euo pipefail
-declare -r IFS=$' \t\n'
+declare IFS=$' \t\n'
 
 # global variables
-declare -r THIS_SCRIPT_DIR=$(dirname $0)
-declare -r ORIGINAL_DIR=$(pwd -P)
-declare -r WORKSPACE_DIR=${1:-${ORIGINAL_DIR}/ws}
-declare -r PROJECTS_DIR=$WORKSPACE_DIR/projects
-declare -r INITIAL_DATABASE_PATH=$WORKSPACE_DIR/td_V2-initial.db
-declare -r DATABASE_PATH=$WORKSPACE_DIR/td_V2-modified.db
-declare -r DATABASE_DOWNLOAD_LINK='https://github.com/clowee/The-Technical-Debt-Dataset/releases/download/2.0/td_V2.db'
+declare -r  THIS_SCRIPT_DIR=$(dirname $0)
+declare -r  ORIGINAL_DIR=$(pwd -P)
+declare -r  WORKSPACE_DIR=${1:-${ORIGINAL_DIR}/ws}
+declare -r  PROJECTS_DIR=$WORKSPACE_DIR/projects
+declare -r  INITIAL_DATABASE_PATH=$WORKSPACE_DIR/td_V2-initial.db
+declare -r  DATABASE_PATH=$WORKSPACE_DIR/td_V2-modified.db
+declare -r  DATABASE_DOWNLOAD_LINK='https://github.com/clowee/The-Technical-Debt-Dataset/releases/download/2.0/td_V2.db'
+declare -r  AUTHOR_EXPERIENCE_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE.sql
+declare -r  AUTHOR_EXPERIENCE_FILE_BACKUP=$WORKSPACE_DIR/AUTHOR_EXPERIENCE-backup.sql
+declare -ri RECENT_DAY_DIFF=30
 
 log() {
     echo >&2 "$@"
 }
 
 run_query() {
-    local -r query="$@"
+    local -r query=$1
+    local -r separator=${2:- }
 
     log "running query: '$query'"
-    sqlite3 -separator ' ' $DATABASE_PATH "$query"
+    sqlite3 -separator "$separator" $DATABASE_PATH "$query"
 }
-# SELECT DISTINCT SUBSTR(component, 0, INSTR(component, ':')) FROM sonar_issues;
 
 ensure_author_project_file_changes() {
     local -r author=$1
@@ -38,6 +41,12 @@ ensure_author_project_file_changes() {
     "
 }
 
+escape_regex() {
+    local -r string=$1
+
+    echo $string | sed -e 's/[]\/$*.^[]/\\&/g'
+}
+
 mine_project() {
     local -r project_id="$1"
 
@@ -50,8 +59,8 @@ mine_project() {
             VALUES
                 (\"$author\", \"$project_id\", $commits);
         "
-	regex_escaped=$(echo $author | sed -e 's/[]\/$*.^[]/\\&/g')
-        git log --author="$regex_escaped" --pretty=tformat: --numstat -- '*.java' |
+        regex_escaped_author=$(escape_regex "$author")
+        git log --author="$regex_escaped_author" --pretty=tformat: --numstat -- '*.java' |
         while read line_additions line_subtractions file
         do
             if echo $file | grep --quiet ' => '
@@ -166,7 +175,9 @@ run_query '
                CREATION_ANALYSIS.REVISION AS CREATION_COMMIT_HASH,
                CLOSE_ANALYSIS.REVISION    AS CLOSE_COMMIT_HASH,
                CREATION_COMMITS.AUTHOR    AS CREATION_AUTHOR,
-               FIX_COMMITS.AUTHOR         AS FIX_AUTHOR
+               FIX_COMMITS.AUTHOR         AS FIX_AUTHOR,
+               SONAR_ISSUES.PROJECT_ID,
+               REPLACE(SONAR_ISSUES.COMPONENT, RTRIM(SONAR_ISSUES.COMPONENT, REPLACE(SONAR_ISSUES.COMPONENT, ":", "")), "") AS FILE
           FROM SONAR_ISSUES
     INNER JOIN SONAR_ANALYSIS CREATION_ANALYSIS
             ON SONAR_ISSUES.CREATION_ANALYSIS_KEY = CREATION_ANALYSIS.ANALYSIS_KEY
@@ -181,47 +192,56 @@ run_query '
                (SONAR_ISSUES.RULE =    "common-java" OR
                 SONAR_ISSUES.RULE LIKE "squid:%");
 '
+run_query '
+    CREATE UNIQUE INDEX IF NOT EXISTS COMMIT_TIME_DIFFS_ISSUE_KEY_INDEX
+        ON COMMIT_TIME_DIFFS (ISSUE_KEY);
+'
+run_query '
+    CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_COMMITS (
+        AUTHOR     TEXT    NOT NULL,
+        PROJECT_ID TEXT    NOT NULL,
+        COMMITS    INTEGER NOT NULL,
+        PRIMARY KEY (AUTHOR, PROJECT_ID)
+    );
+'
+run_query '
+    CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_FILE_CHANGES (
+        AUTHOR             TEXT              NOT NULL,
+        PROJECT_ID         TEXT              NOT NULL,
+        FILE               TEXT              NOT NULL,
+        TOTAL_CHANGES      INTEGER DEFAULT 0 NOT NULL,
+        RENAMES            INTEGER DEFAULT 0 NOT NULL,
+        LINE_ADDITIONS     INTEGER DEFAULT 0 NOT NULL,
+        LINE_SUBTRACTIONS  INTEGER DEFAULT 0 NOT NULL,
+        TOTAL_LINE_CHANGES INTEGER DEFAULT 0 NOT NULL,
+        PRIMARY KEY (AUTHOR, PROJECT_ID, FILE)
+    );
+'
 
-# TODO: AUTHOR_EXPERIENCE
-# "
-# 	CREATE TABLE AUTHOR_EXPERIENCE (
-# 		ISSUE_KEY          TEXT NOT NULL,
-# 		IS_FIX	           BOOL NOT NULL,
-# 		AUTHOR	           TEXT NOT NULL,
-# 		PROJECT            TEXT NOT NULL,
-# 		FILE               TEXT NOT NULL,
-# 		TOTAL_COMMITS		INTEGER NOT NULL,
-# 		HOURS_SINCE_LAST_TOUCH	INTEGER NOT NULL,
-# 		TOTAL_FILE_COMMITS    INTEGER NOT NULL,
-# 		TOTAL_PROJECT_COMMITS INTEGER NOT NULL,
-# 		RECENT_FILE_COMMITS    INTEGER, # num commits in last 30-days
-# 		RECENT_PROJECT_COMMITS INTEGER  # num commits in last 30-days
-# 	);
-# "
+run_query '
+    CREATE TABLE IF NOT EXISTS AUTHOR_EXPERIENCE (
+        ISSUE_KEY                      TEXT    NOT NULL,
+        IS_FIX                         INTEGER NOT NULL,
+        AUTHOR                         TEXT    NOT NULL,
+        PROJECT_ID                     TEXT    NOT NULL,
+        FILE                           TEXT    NOT NULL,
+        TOTAL_HOURS_SINCE_LAST_TOUCH   INTEGER,
+        TOTAL_FILE_COMMITS             INTEGER NOT NULL,
+        TOTAL_PROJECT_COMMITS          INTEGER NOT NULL,
+        TOTAL_RECENT_FILE_COMMITS      INTEGER NOT NULL,
+        TOTAL_RECENT_PROJECT_COMMITS   INTEGER NOT NULL,
+        AUTHOR_HOURS_SINCE_LAST_TOUCH  INTEGER,
+        AUTHOR_FILE_COMMITS            INTEGER NOT NULL,
+        AUTHOR_PROJECT_COMMITS         INTEGER NOT NULL,
+        AUTHOR_RECENT_FILE_COMMITS     INTEGER NOT NULL,
+        AUTHOR_RECENT_PROJECT_COMMITS  INTEGER NOT NULL,
+        PRIMARY KEY (ISSUE_KEY, IS_FIX)
+    );
+'
 
 # UNCOMMENT TO GENERATE REMAINING TABLES
 # --------------------------------------
 # build AUTHOR_PROJECT_COMMITS and AUTHOR_PROJECT_FILE_CHANGES
-# run_query '
-#     CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_COMMITS (
-#         AUTHOR     TEXT    NOT NULL,
-#         PROJECT_ID TEXT    NOT NULL,
-#         COMMITS    INTEGER NOT NULL,
-#         PRIMARY KEY (AUTHOR, PROJECT_ID)
-#     );
-#
-#     CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_FILE_CHANGES (
-#         AUTHOR             TEXT              NOT NULL,
-#         PROJECT_ID         TEXT              NOT NULL,
-#         FILE               TEXT              NOT NULL,
-#         TOTAL_CHANGES      INTEGER DEFAULT 0 NOT NULL,
-#         RENAMES            INTEGER DEFAULT 0 NOT NULL,
-#         LINE_ADDITIONS     INTEGER DEFAULT 0 NOT NULL,
-#         LINE_SUBTRACTIONS  INTEGER DEFAULT 0 NOT NULL,
-#         TOTAL_LINE_CHANGES INTEGER DEFAULT 0 NOT NULL,
-#         PRIMARY KEY (AUTHOR, PROJECT_ID, FILE)
-#     );
-# '
 # # FIXME: parallelize
 # cd $PROJECTS_DIR
 # for project_id in *
@@ -230,3 +250,146 @@ run_query '
 # done
 
 # wait for mining to finish
+
+commit_history() {
+    git rev-list --count "$@" 2>/dev/null || echo 0
+}
+
+hours_since_last_touch() {
+    local -r commit="$1"
+    local -r file_pattern="$2"
+    local -r author="$3"
+
+    local -r last_commit="$(git rev-list -n 1 --author="$author" "$commit" -- "$file_pattern")"
+    if [ -z "$last_commit" ]
+    then
+        echo NULL
+        return
+    fi
+    local -r ts_commit="$(     git log -n 1 --format=%ct "$commit")"
+    local -r ts_last_commit="$(git log -n 1 --format=%ct "$last_commit" 2>/dev/null)"
+    if [ -z "$ts_last_commit" ]
+    then
+        echo NULL
+        return
+    fi
+    local -r delta=$(( $ts_commit - $ts_last_commit ));
+    date -d @$delta +'%H'
+}
+
+insert_author_experience() {
+    local -r  issue_key="$1"
+    local -ri is_fix="$2"
+    local -r  author="$3"
+    local -r  project_id="$4"
+    local -r  file="$5"
+    local -r  commit_hash="$6"
+    local -r  date="$7"
+    pushd $PROJECTS_DIR/$project_id
+
+    local -r  regex_escaped_author=$(escape_regex "$author")
+    local -r  file_pattern="*${file#*/src}"
+    local -r  previous_revision="$commit_hash~"
+    local -r  since_date="$(date -d "$(date -d  "$date")-$RECENT_DAY_DIFF days")"
+
+    local -r  total_hours_since_last_touch=$( hours_since_last_touch "$commit_hash" "$file_pattern" ".*")
+    local -ri total_file_commits=$(          commit_history "$previous_revision" -- "$file_pattern")
+    local -ri total_project_commits=$(       commit_history "$previous_revision")
+    local -ri total_recent_file_commits=$(   commit_history "$previous_revision" --since="$since_date" -- "$file_pattern")
+    local -ri total_recent_project_commits=$(commit_history "$previous_revision" --since="$since_date")
+    local -r  author_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$file_pattern" "$regex_escaped_author")
+    local -ri author_file_commits=$(          commit_history --author="$regex_escaped_author" "$previous_revision" -- "$file_pattern")
+    local -ri author_project_commits=$(       commit_history --author="$regex_escaped_author" "$previous_revision")
+    local -ri author_recent_file_commits=$(   commit_history --author="$regex_escaped_author" "$previous_revision" --since="$since_date" -- "$file_pattern")
+    local -ri author_recent_project_commits=$(commit_history --author="$regex_escaped_author" "$previous_revision" --since="$since_date")
+    log "    issue_key,is_fix=\"$issue_key\",$is_fix"
+    log "        author=\"$author\""
+    log "        since_date=\"$since_date\""
+    log "        total_hours_since_last_touch=\"$total_hours_since_last_touch\""
+    log "        total_file_commits=\"$total_file_commits\""
+    log "        total_project_commits=\"$total_project_commits\""
+    log "        total_recent_file_commits=\"$total_recent_file_commits\""
+    log "        total_recent_project_commits=\"$total_recent_project_commits\""
+    log "        author_hours_since_last_touch=\"$author_hours_since_last_touch\""
+    log "        author_file_commits=\"$author_file_commits\""
+    log "        author_project_commits=\"$author_project_commits\""
+    log "        author_recent_file_commits=\"$author_recent_file_commits\""
+    log "        author_recent_project_commits=\"$author_recent_project_commits\""
+    echo "
+            (\"$issue_key\",
+              $is_fix,
+              \"$author\",
+              \"$project_id\",
+              \"$file\",
+              $total_hours_since_last_touch,
+              $total_file_commits,
+              $total_project_commits,
+              $total_recent_file_commits,
+              $total_recent_project_commits,
+              $author_hours_since_last_touch,
+              $author_file_commits,
+              $author_project_commits,
+              $author_recent_file_commits,
+              $author_recent_project_commits)
+    " >> $AUTHOR_EXPERIENCE_FILE
+    popd
+}
+
+declare -ri NUM_ISSUES=$(run_query 'SELECT count(*) FROM COMMIT_TIME_DIFFS;')
+declare -i  ISSUE_ID=0
+declare     SEP=""
+if [ -f $AUTHOR_EXPERIENCE_FILE ]
+then
+    log "backing up $AUTHOR_EXPERIENCE_FILE -> $AUTHOR_EXPERIENCE_FILE_BACKUP"
+    mv $AUTHOR_EXPERIENCE_FILE $AUTHOR_EXPERIENCE_FILE_BACKUP
+fi
+echo "
+        INSERT INTO AUTHOR_EXPERIENCE
+        VALUES
+" >> $AUTHOR_EXPERIENCE_FILE
+run_query '
+        SELECT ISSUE_KEY,
+               PROJECT_ID,
+               CREATION_AUTHOR,
+               FIX_AUTHOR,
+               CREATION_COMMIT_HASH,
+               CLOSE_COMMIT_HASH,
+               FILE,
+               CREATION_DATE,
+               CLOSE_DATE
+          FROM COMMIT_TIME_DIFFS
+      ORDER BY ISSUE_KEY;
+' '|' | while IFS='|' read issue_key       \
+                      project_id           \
+                      creation_author      \
+                      fix_author           \
+                      creation_commit_hash \
+                      close_commit_hash    \
+                      file                 \
+                      creation_date        \
+                      close_date
+do
+    ((++ISSUE_ID))
+    log "START processing \"$issue_key\" $ISSUE_ID/$NUM_ISSUES"
+    log "    issue_key=\"$issue_key\""
+    log "    project_id=\"$project_id\""
+    log "    creation_author=\"$creation_author\""
+    log "    fix_author=\"$fix_author\""
+    log "    creation_commit_hash=\"$creation_commit_hash\""
+    log "    close_commit_hash=\"$close_commit_hash\""
+    log "    file=\"$file\""
+    log "    creation_date=\"$creation_date\""
+    log "    close_date=\"$close_date\""
+    echo $SEP >> $AUTHOR_EXPERIENCE_FILE
+    SEP=','
+    insert_author_experience "$issue_key" 0 "$creation_author" "$project_id" "$file" "$creation_commit_hash" "$creation_date"
+    if [ -n "$fix_author" ]
+    then
+        echo $SEP >> $AUTHOR_EXPERIENCE_FILE
+        insert_author_experience "$issue_key" 1 "$fix_author" "$project_id" "$file" "$close_commit_hash" "$close_date"
+    fi
+    log "DONE processing \"$issue_key\" $ISSUE_ID/$NUM_ISSUES"
+done
+echo ';' >> $AUTHOR_EXPERIENCE_FILE
+
+sqlite3 $DATABASE_PATH < $AUTHOR_EXPERIENCE_FILE
