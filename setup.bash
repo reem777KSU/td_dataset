@@ -142,30 +142,62 @@ run_query '
         SELECT SONAR_ISSUES.ISSUE_KEY,
                SONAR_ISSUES.RULE,
                SONAR_ISSUES.CREATION_ANALYSIS_KEY,
-               SONAR_ISSUES.CLOSE_ANALYSIS_KEY,
+               CASE WHEN SONAR_ISSUES.CLOSE_ANALYSIS_KEY IS ""
+                    THEN NULL
+                    ELSE SONAR_ISSUES.CLOSE_ANALYSIS_KEY
+                    END
+               AS CLOSE_ANALYSIS_KEY,
                SONAR_ISSUES.CREATION_DATE,
-               SONAR_ISSUES.CLOSE_DATE,
-               SONAR_ISSUES.TYPE,
-               CAST((julianday(SONAR_ISSUES.CLOSE_DATE) - julianday(SONAR_ISSUES.CREATION_DATE)) AS INTEGER)      AS DAY_DIFF,
-               CAST((julianday(SONAR_ISSUES.CLOSE_DATE) - julianday(SONAR_ISSUES.CREATION_DATE)) * 24 AS INTEGER) AS HOURS_DIFF,
-               CREATION_ANALYSIS.REVISION                                                                         AS CREATION_COMMIT_HASH,
-               CLOSE_ANALYSIS.REVISION                                                                            AS CLOSE_COMMIT_HASH,
-               CREATION_COMMITS.AUTHOR                                                                            AS CREATION_AUTHOR,
-               FIX_COMMITS.AUTHOR                                                                                 AS FIX_AUTHOR
+               CASE WHEN SONAR_ISSUES.CLOSE_DATE IS ""
+                    THEN NULL
+                    ELSE SONAR_ISSUES.CLOSE_DATE
+                    END
+               AS CLOSE_DATE,
+               CASE WHEN SONAR_ISSUES.CLOSE_DATE IS NULL
+                    THEN NULL
+                    ELSE CAST((JULIANDAY(SONAR_ISSUES.CLOSE_DATE) - JULIANDAY(SONAR_ISSUES.CREATION_DATE)) AS INTEGER)
+                    END
+               AS DAY_DIFF,
+               CASE WHEN SONAR_ISSUES.CLOSE_DATE IS NULL
+                    THEN NULL
+                    ELSE CAST((JULIANDAY(SONAR_ISSUES.CLOSE_DATE) - JULIANDAY(SONAR_ISSUES.CREATION_DATE)) AS INTEGER) * 24
+                    END
+               AS HOURS_DIFF,
+               CREATION_ANALYSIS.REVISION AS CREATION_COMMIT_HASH,
+               CLOSE_ANALYSIS.REVISION    AS CLOSE_COMMIT_HASH,
+               CREATION_COMMITS.AUTHOR    AS CREATION_AUTHOR,
+               FIX_COMMITS.AUTHOR         AS FIX_AUTHOR
           FROM SONAR_ISSUES
     INNER JOIN SONAR_ANALYSIS CREATION_ANALYSIS
-            ON CREATION_ANALYSIS_KEY      = CREATION_ANALYSIS.ANALYSIS_KEY
+            ON SONAR_ISSUES.CREATION_ANALYSIS_KEY = CREATION_ANALYSIS.ANALYSIS_KEY
     INNER JOIN GIT_COMMITS    CREATION_COMMITS
             ON CREATION_ANALYSIS.REVISION = CREATION_COMMITS.COMMIT_HASH
-    INNER JOIN SONAR_ANALYSIS CLOSE_ANALYSIS
-            ON CLOSE_ANALYSIS_KEY         = CLOSE_ANALYSIS.ANALYSIS_KEY
-    INNER JOIN GIT_COMMITS    FIX_COMMITS
-            ON CLOSE_ANALYSIS.REVISION    = FIX_COMMITS.COMMIT_HASH
-         WHERE SONAR_ISSUES.CLOSE_DATE != ""           AND
-               SONAR_ISSUES.TYPE       =  "CODE_SMELL" AND
+     LEFT JOIN SONAR_ANALYSIS CLOSE_ANALYSIS
+            ON (SONAR_ISSUES.CLOSE_ANALYSIS_KEY != ""                          AND
+                SONAR_ISSUES.CLOSE_ANALYSIS_KEY =  CLOSE_ANALYSIS.ANALYSIS_KEY)
+     LEFT JOIN GIT_COMMITS    FIX_COMMITS
+            ON CLOSE_ANALYSIS.REVISION = FIX_COMMITS.COMMIT_HASH
+         WHERE SONAR_ISSUES.TYPE       =  "CODE_SMELL" AND
                (SONAR_ISSUES.RULE =    "common-java" OR
                 SONAR_ISSUES.RULE LIKE "squid:%");
 '
+
+# TODO: AUTHOR_EXPERIENCE
+# "
+# 	CREATE TABLE AUTHOR_EXPERIENCE (
+# 		ISSUE_KEY          TEXT NOT NULL,
+# 		IS_FIX	           BOOL NOT NULL,
+# 		AUTHOR	           TEXT NOT NULL,
+# 		PROJECT            TEXT NOT NULL,
+# 		FILE               TEXT NOT NULL,
+# 		TOTAL_COMMITS		INTEGER NOT NULL,
+# 		HOURS_SINCE_LAST_TOUCH	INTEGER NOT NULL,
+# 		TOTAL_FILE_COMMITS    INTEGER NOT NULL,
+# 		TOTAL_PROJECT_COMMITS INTEGER NOT NULL,
+# 		RECENT_FILE_COMMITS    INTEGER, # num commits in last 30-days
+# 		RECENT_PROJECT_COMMITS INTEGER  # num commits in last 30-days
+# 	);
+# "
 
 # UNCOMMENT TO GENERATE REMAINING TABLES
 # --------------------------------------
