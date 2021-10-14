@@ -49,22 +49,24 @@ Generated tables are checked into this workspace as `.csv` files at
 `<repo dir>/generated_tables/<TABLE_NAME>.csv`.
 ### AUTHOR_PROJECT_COMMITS
 Records the total number of `COMMITS` that an `AUTHOR` has contributed to a
-project identified by `PROJECT_ID`.
+project identified by `PROJECT_ID`, as well as their `FIRST_COMMIT_DATE` for
+that project.
 
 Schema:
 ```
 CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_COMMITS (
-    AUTHOR     TEXT    NOT NULL,
-    PROJECT_ID TEXT    NOT NULL,
-    COMMITS    INTEGER NOT NULL,
+    AUTHOR            TEXT    NOT NULL,
+    PROJECT_ID        TEXT    NOT NULL,
+    COMMITS           INTEGER NOT NULL,
+    FIRST_COMMIT_DATE TEXT    NOT NULL,
     PRIMARY KEY (AUTHOR, PROJECT_ID)
 );
 ```
 Sample row:
 ```
 $ sqlite3 -header ws/td_V2-modified.db 'SELECT * FROM AUTHOR_PROJECT_COMMITS LIMIT 1;'
-AUTHOR|PROJECT_ID|COMMITS
-Olivier Lamy <olamy@apache.org>|org.apache:archiva|4152
+AUTHOR|PROJECT_ID|COMMITS|FIRST_COMMIT_DATE
+Olivier Lamy <olamy@apache.org>|org.apache:archiva|4152|2011-05-10 20:00:55
 ```
 ### AUTHOR_PROJECT_FILE_CHANGES
 Records the total kinds of changes that an `AUTHOR` has contributed to a (java) `FILE`
@@ -97,7 +99,7 @@ Sample row:
 ```
 $ sqlite3 -header ws/td_V2-modified.db 'SELECT * FROM AUTHOR_PROJECT_FILE_CHANGES LIMIT 1;'
 AUTHOR|PROJECT_ID|FILE|TOTAL_CHANGES|RENAMES|LINE_ADDITIONS|LINE_SUBTRACTIONS|TOTAL_LINE_CHANGES
-Olivier Lamy <olamy@apache.org>|org.apache:archiva|archiva-modules/archiva-base/archiva-consumers/archiva-consumer-archetype/src/main/resources/archetype-resources/src/test/java/SimpleArtifactConsumerTest.java|4|0|102|12|114 
+Olivier Lamy <olamy@apache.org>|org.apache:archiva|archiva-modules/archiva-base/archiva-consumers/archiva-consumer-archetype/src/main/resources/archetype-resources/src/test/java/SimpleArtifactConsumerTest.java|4|0|102|12|114
 ```
 ### Generate Auxillary Tables
 Uncomment the section at the end of the `setup.bash` script and run it.  This
