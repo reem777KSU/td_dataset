@@ -13,6 +13,7 @@ declare -r  INITIAL_DATABASE_PATH=$WORKSPACE_DIR/td_V2-initial.db
 declare -r  DATABASE_PATH=$WORKSPACE_DIR/td_V2-modified.db
 declare -r  DATABASE_DOWNLOAD_LINK='https://github.com/clowee/The-Technical-Debt-Dataset/releases/download/2.0/td_V2.db'
 declare -r  AUTHOR_EXPERIENCE_QUEUE_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_QUEUE.csv
+declare -r  AUTHOR_EXPERIENCE_LOCK_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_LOCK.txt
 declare -ri RECENT_DAY_DIFF=30
 
 log() {
@@ -331,28 +332,34 @@ insert_author_experience() {
     log "        author_recent_file_commits=\"$author_recent_file_commits\""
     log "        author_recent_project_commits=\"$author_recent_project_commits\""
     log "        author_hours_since_first_project_commit=$author_hours_since_first_project_commit"
-    run_query "
-        INSERT INTO AUTHOR_EXPERIENCE
-        VALUES
-            (\"$issue_key\",
-             $is_fix,
-             \"$author\",
-             \"$project_id\",
-             \"$file\",
-             \"$commit_hash\",
-             \"$commit_date\",
-             $total_hours_since_last_touch,
-             $total_file_commits,
-             $total_project_commits,
-             $total_recent_file_commits,
-             $total_recent_project_commits,
-             $author_hours_since_last_touch,
-             $author_file_commits,
-             $author_project_commits,
-             $author_recent_file_commits,
-             $author_recent_project_commits,
-             $author_hours_since_first_project_commit);
-    "
+
+    local -ri lock_fd=222
+    (flock $lock_fd
+    {
+        run_query "
+            INSERT INTO AUTHOR_EXPERIENCE
+            VALUES
+                (\"$issue_key\",
+                 $is_fix,
+                 \"$author\",
+                 \"$project_id\",
+                 \"$file\",
+                 \"$commit_hash\",
+                 \"$commit_date\",
+                 $total_hours_since_last_touch,
+                 $total_file_commits,
+                 $total_project_commits,
+                 $total_recent_file_commits,
+                 $total_recent_project_commits,
+                 $author_hours_since_last_touch,
+                 $author_file_commits,
+                 $author_project_commits,
+                 $author_recent_file_commits,
+                 $author_recent_project_commits,
+                 $author_hours_since_first_project_commit);
+        "
+    }) 222>$AUTHOR_EXPERIENCE_LOCK_FILE
+
     popd
 }
 
