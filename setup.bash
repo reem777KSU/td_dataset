@@ -255,11 +255,11 @@ run_query '
 # --------------------------------------
 # build AUTHOR_PROJECT_COMMITS and AUTHOR_PROJECT_FILE_CHANGES
 # FIXME: parallelize
-cd $PROJECTS_DIR
-for project_id in *
-do
-    mine_project "$project_id"
-done
+# cd $PROJECTS_DIR
+# for project_id in *
+# do
+#     mine_project "$project_id"
+# done
 
 # wait for mining to finish
 
