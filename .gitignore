@@ -3,3 +3,6 @@ ws/
 
 # vim artifacts
 *.swp
+
+# database
+td_V2.db
