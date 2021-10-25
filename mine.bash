@@ -324,18 +324,12 @@ insert_author_experience() {
          total_source_file_line_additions           \
          total_source_file_line_subtractions        \
          total_source_file_line_changes             <<< $(detailed_commit_history "$previous_revision" -- "$source_file_pattern")
-    read total_project_commits                      \
-         total_project_line_additions               \
-         total_project_line_subtractions            \
-         total_project_line_changes                 <<< $(detailed_commit_history "$previous_revision")
+    local -ri total_project_commits=$(commit_history "$previous_revision")
     read total_recent_source_file_commits           \
          total_recent_source_file_line_additions    \
          total_recent_source_file_line_subtractions \
          total_recent_source_file_line_changes      <<< $(detailed_commit_history "$previous_revision" --since="$since_date" -- "$source_file_pattern")
-    read total_recent_project_commits               \
-         total_recent_project_line_additions        \
-         total_recent_project_line_subtractions     \
-         total_recent_project_line_changes          <<< $(detailed_commit_history "$previous_revision" --since="$since_date")
+    local -ri total_recent_project_commits=$(commit_history "$previous_revision" --since="$since_date")
 
     local -r  author_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$source_file_pattern" "$regex_escaped_author")
     let       author_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$author_first_commit_date" +%s ))/3600
@@ -343,18 +337,12 @@ insert_author_experience() {
          author_source_file_line_additions           \
          author_source_file_line_subtractions        \
          author_source_file_line_changes             <<< $(detailed_commit_history --author="$regex_escaped_author" "$previous_revision" -- "$source_file_pattern")
-    read author_project_commits                      \
-         author_project_line_additions               \
-         author_project_line_subtractions            \
-         author_project_line_changes                 <<< $(detailed_commit_history --author="$regex_escaped_author" "$previous_revision")
+    local -ri author_project_commits=$(commit_history --author="$regex_escaped_author" "$previous_revision")
     read author_recent_source_file_commits           \
          author_recent_source_file_line_additions    \
          author_recent_source_file_line_subtractions \
          author_recent_source_file_line_changes      <<< $(detailed_commit_history --author="$regex_escaped_author" "$previous_revision" --since="$since_date" -- "$source_file_pattern")
-    read author_recent_project_commits               \
-         author_recent_project_line_additions        \
-         author_recent_project_line_subtractions     \
-         author_recent_project_line_changes          <<< $(detailed_commit_history --author="$regex_escaped_author" "$previous_revision" --since="$since_date")
+    local -ri author_recent_project_commits=$(commit_history --author="$regex_escaped_author" "$previous_revision" --since="$since_date")
     log "    issue_key,is_fix=\"$issue_key\",$is_fix\n" \
         "        author=\"$author\"\n" \
         "        since_date=\"$since_date\"\n" \
@@ -393,17 +381,11 @@ insert_author_experience() {
                  $total_source_file_line_subtractions,
                  $total_source_file_line_changes,
                  $total_project_commits,
-                 $total_project_line_additions,
-                 $total_project_line_subtractions,
-                 $total_project_line_changes,
                  $total_recent_source_file_commits,
                  $total_recent_source_file_line_additions,
                  $total_recent_source_file_line_subtractions,
                  $total_recent_source_file_line_changes,
                  $total_recent_project_commits,
-                 $total_recent_project_line_additions,
-                 $total_recent_project_line_subtractions,
-                 $total_recent_project_line_changes,
                  $author_hours_since_last_touch,
                  $author_hours_since_first_project_commit,
                  $author_source_file_commits,
@@ -411,17 +393,11 @@ insert_author_experience() {
                  $author_source_file_line_subtractions,
                  $author_source_file_line_changes,
                  $author_project_commits,
-                 $author_project_line_additions,
-                 $author_project_line_subtractions,
-                 $author_project_line_changes,
                  $author_recent_source_file_commits,
                  $author_recent_source_file_line_additions,
                  $author_recent_source_file_line_subtractions,
                  $author_recent_source_file_line_changes,
-                 $author_recent_project_commits,
-                 $author_recent_project_line_additions,
-                 $author_recent_project_line_subtractions,
-                 $author_recent_project_line_changes);
+                 $author_recent_project_commits);
         "
     }) 222>$AUTHOR_EXPERIENCE_LOCK_SOURCE_FILE
 
