@@ -80,7 +80,6 @@ run_query '
     );
 '
 run_query '
-    DROP TABLE AUTHOR_EXPERIENCE; -- TODO: remove
     CREATE TABLE IF NOT EXISTS AUTHOR_EXPERIENCE (
         ISSUE_KEY                                   TEXT    NOT NULL,
         IS_FIX                                      INTEGER NOT NULL,
