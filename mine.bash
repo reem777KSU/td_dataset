@@ -242,11 +242,11 @@ run_query '
 
 # build AUTHOR_PROJECT_COMMITS and AUTHOR_PROJECT_SOURCE_FILE_CHANGES
 # FIXME: parallelize
-cd $PROJECTS_DIR
-for project_id in *
-do
-    mine_project "$project_id"
-done
+# cd $PROJECTS_DIR
+# for project_id in *
+# do
+#     mine_project "$project_id"
+# done
 
 commit_history() {
     git rev-list --count "$@" 2>/dev/null || echo 0
@@ -258,7 +258,6 @@ detailed_commit_history() {
     local -i  total_line_subtractions=0
     if  [ $total_commits  -ne 0 ]
     then
-        git log --pretty=tformat: --numstat "$@" |
         while read line_additions line_subtractions _file
         do
             # line changes aren't counted for binary source_files
@@ -270,11 +269,11 @@ detailed_commit_history() {
             then
                 line_subtractions=0
             fi
-            ((total_line_additions+=line_additions))
-            ((total_line_subtractions+=line_subtractions))
-        done
+            ((total_line_additions+=line_additions)) || true
+            ((total_line_subtractions+=line_subtractions)) || true
+        done <<< $(git log --pretty=tformat: --numstat "$@")
     fi
-    let total_line_changes=(total_line_additions+total_line_subtractions)
+    let total_line_changes=(total_line_additions+total_line_subtractions) || true
 
     echo $total_commits $total_line_additions $total_line_subtractions $total_line_changes
 }
@@ -284,7 +283,7 @@ hours_since_last_touch() {
     local -r source_file_pattern="$2"
     local -r author="$3"
 
-    local -r last_commit="$(git rev-list -n 1 --author="$author" "$commit" -- "$source_file_pattern")"
+    local -r last_commit="$(git rev-list -n 1 --author="$author" "$commit~" -- "$source_file_pattern")"
     if [ -z "$last_commit" ]
     then
         echo NULL
@@ -297,8 +296,8 @@ hours_since_last_touch() {
         echo NULL
         return
     fi
-    local -r delta=$(( $ts_commit - $ts_last_commit ));
-    date -d @$delta +'%H'
+    let delta_hours=($ts_commit - $ts_last_commit)/3600 || true
+    echo $delta_hours
 }
 
 insert_author_experience() {
@@ -319,7 +318,7 @@ insert_author_experience() {
     local -r  author_first_commit_date=$(get_first_commit_date "$regex_escaped_author")
 
     local -r  total_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$source_file_pattern" ".*")
-    let       total_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$first_commit_date" +%s ))/3600
+    let       total_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$first_commit_date" +%s ))/3600 || true
     read total_source_file_commits                  \
          total_source_file_line_additions           \
          total_source_file_line_subtractions        \
@@ -332,7 +331,7 @@ insert_author_experience() {
     local -ri total_recent_project_commits=$(commit_history "$previous_revision" --since="$since_date")
 
     local -r  author_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$source_file_pattern" "$regex_escaped_author")
-    let       author_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$author_first_commit_date" +%s ))/3600
+    let       author_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$author_first_commit_date" +%s ))/3600 || true
     read author_source_file_commits                  \
          author_source_file_line_additions           \
          author_source_file_line_subtractions        \
@@ -347,7 +346,7 @@ insert_author_experience() {
         "        author=\"$author\"\n" \
         "        since_date=\"$since_date\"\n" \
         "        commit_hash=\"$commit_hash\"\n" \
-        "        commit_date=\"$commit_date\"\n" \ \
+        "        commit_date=\"$commit_date\"\n" \
         "        total_hours_since_last_touch=\"$total_hours_since_last_touch\"\n" \
         "        total_hours_since_first_project_commit=$total_hours_since_first_project_commit\n" \
         "        total_source_file_commits=\"$total_source_file_commits\"\n" \
@@ -367,37 +366,47 @@ insert_author_experience() {
         run_query "
             INSERT INTO AUTHOR_EXPERIENCE
             VALUES
-                (\"$issue_key\",
-                 $is_fix,
-                 \"$author\",
-                 \"$project_id\",
-                 \"$source_file\",
-                 \"$commit_hash\",
-                 \"$commit_date\",
-                 $total_hours_since_last_touch,
-                 $total_hours_since_first_project_commit,
-                 $total_source_file_commits,
-                 $total_source_file_line_additions,
-                 $total_source_file_line_subtractions,
-                 $total_source_file_line_changes,
-                 $total_project_commits,
-                 $total_recent_source_file_commits,
-                 $total_recent_source_file_line_additions,
-                 $total_recent_source_file_line_subtractions,
-                 $total_recent_source_file_line_changes,
-                 $total_recent_project_commits,
-                 $author_hours_since_last_touch,
-                 $author_hours_since_first_project_commit,
-                 $author_source_file_commits,
-                 $author_source_file_line_additions,
-                 $author_source_file_line_subtractions,
-                 $author_source_file_line_changes,
-                 $author_project_commits,
-                 $author_recent_source_file_commits,
-                 $author_recent_source_file_line_additions,
-                 $author_recent_source_file_line_subtractions,
-                 $author_recent_source_file_line_changes,
-                 $author_recent_project_commits);
+                (/* ISSUE_KEY                                   = */ \"$issue_key\",
+                 /* IS_FIX                                      = */ $is_fix,
+                 /* AUTHOR                                      = */ \"$author\",
+                 /* PROJECT_ID                                  = */ \"$project_id\",
+                 /* SOURCE_FILE                                 = */ \"$source_file\",
+                 /* COMMIT_HASH                                 = */ \"$commit_hash\",
+                 /* COMMIT_DATE                                 = */ \"$commit_date\",
+                                                               
+                 /* TOTAL_HOURS_SINCE_LAST_TOUCH                = */ $total_hours_since_last_touch,
+                 /* TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT      = */ $total_hours_since_first_project_commit,
+                                                              
+                 /* TOTAL_SOURCE_FILE_COMMITS                   = */ $total_source_file_commits,
+                 /* TOTAL_SOURCE_FILE_LINE_ADDITIONS            = */ $total_source_file_line_additions,
+                 /* TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS         = */ $total_source_file_line_subtractions,
+                 /* TOTAL_SOURCE_FILE_LINE_CHANGES              = */ $total_source_file_line_changes,
+                                                             
+                 /* TOTAL_PROJECT_COMMITS                       = */ $total_project_commits,
+                                                            
+                 /* TOTAL_RECENT_SOURCE_FILE_COMMITS            = */ $total_recent_source_file_commits,
+                 /* TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS     = */ $total_recent_source_file_line_additions,
+                 /* TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS  = */ $total_recent_source_file_line_subtractions,
+                 /* TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES       = */ $total_recent_source_file_line_changes,
+                                                           
+                 /* TOTAL_RECENT_PROJECT_COMMITS                = */ $total_recent_project_commits,
+                                                          
+                 /* AUTHOR_HOURS_SINCE_LAST_TOUCH               = */ $author_hours_since_last_touch,
+                 /* AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT     = */ $author_hours_since_first_project_commit,
+                                                         
+                 /* AUTHOR_SOURCE_FILE_COMMITS                  = */ $author_source_file_commits,
+                 /* AUTHOR_SOURCE_FILE_LINE_ADDITIONS           = */ $author_source_file_line_additions,
+                 /* AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS        = */ $author_source_file_line_subtractions,
+                 /* AUTHOR_SOURCE_FILE_LINE_CHANGES             = */ $author_source_file_line_changes,
+                                                        
+                 /* AUTHOR_PROJECT_COMMITS                      = */ $author_project_commits,
+                                                       
+                 /* AUTHOR_RECENT_SOURCE_FILE_COMMITS           = */ $author_recent_source_file_commits,
+                 /* AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS    = */ $author_recent_source_file_line_additions,
+                 /* AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS = */ $author_recent_source_file_line_subtractions,
+                 /* AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES      = */ $author_recent_source_file_line_changes,
+
+                 /* AUTHOR_RECENT_PROJECT_COMMITS               = */ $author_recent_project_commits);
         "
     }) 222>$AUTHOR_EXPERIENCE_LOCK_SOURCE_FILE
 
@@ -434,16 +443,16 @@ while IFS='|' read issue_key            \
                    close_date
 do
     ((++ISSUE_INDEX))
-    log "START processing \"$issue_key\" $ISSUE_INDEX/$NUM_ISSUES"
-    log "    issue_key=\"$issue_key\""
-    log "    project_id=\"$project_id\""
-    log "    creation_author=\"$creation_author\""
-    log "    fix_author=\"$fix_author\""
-    log "    creation_commit_hash=\"$creation_commit_hash\""
-    log "    close_commit_hash=\"$close_commit_hash\""
-    log "    source_file=\"$source_file\""
-    log "    creation_date=\"$creation_date\""
-    log "    close_date=\"$close_date\""
+    log "START processing \"$issue_key\" $ISSUE_INDEX/$NUM_ISSUES\n" \
+        "    issue_key=\"$issue_key\"\n" \
+        "    project_id=\"$project_id\"\n" \
+        "    creation_author=\"$creation_author\"\n" \
+        "    fix_author=\"$fix_author\"\n" \
+        "    creation_commit_hash=\"$creation_commit_hash\"\n" \
+        "    close_commit_hash=\"$close_commit_hash\"\n" \
+        "    source_file=\"$source_file\"\n" \
+        "    creation_date=\"$creation_date\"\n" \
+        "    close_date=\"$close_date\"\n"
     insert_author_experience "$issue_key" 0 "$creation_author" "$project_id" "$source_file" "$creation_commit_hash" "$creation_date" &
     if [ -n "$fix_author" ]
     then

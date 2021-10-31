@@ -10,7 +10,7 @@ declare -r  DATABASE_PATH=$THIS_SCRIPT_DIR/td_V2.db
 declare -r  DATABASE_DOWNLOAD_LINK='https://github.com/clowee/The-Technical-Debt-Dataset/releases/download/2.0/td_V2.db'
 
 log() {
-    echo >&2 "$@"
+    echo -e >&2 "$@"
 }
 
 run_query() {
