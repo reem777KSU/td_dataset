@@ -399,6 +399,21 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
     IS_FAULT_FIXING                             INTEGER NOT NULL,
         -- '1' if this commit fixed at least 1 JIRA_ISSUE, '0' otherwise.
 
+    NUM_FILES                               INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of files touched in 'COMMIT_HASH'.
+
+    NUM_DIRECTORIES                         INTEGER DEFAULT 0  NOT NULL,
+        -- Number of unique directories containing all files touched in
+        -- 'COMMIT_HASH'.
+
+    NUM_SOURCE_FILES                        INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of files touched in 'COMMIT_HASH' that are targeted by
+        -- sonar qube code smell rules (java files).
+
+    NUM_SOURCE_DIRECTORIES                  INTEGER DEFAULT 0  NOT NULL,
+        -- Number of unique directories containing source (java) files touched
+        -- in 'COMMIT_HASH'.
+
     ---------------------------------------------------------------------
     -- The following columns count the number of sonar qube violations --
     -- introduced in this commit by rule (column name).                --

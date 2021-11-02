@@ -6,9 +6,8 @@ declare -r THIS_SCRIPT_DIR="$(cd -- "$(dirname "$0")" >/dev/null 2>&1; pwd -P)"
 . $THIS_SCRIPT_DIR/common.bash
 
 # global variables
-declare -r  PROJECTS_DIR=$WORKSPACE_DIR/projects
-declare -r  AUTHOR_EXPERIENCE_QUEUE_SOURCE_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_QUEUE.csv
-declare -r  AUTHOR_EXPERIENCE_LOCK_SOURCE_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_LOCK.txt
+declare -r  AUTHOR_EXPERIENCE_QUEUE_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_QUEUE.csv
+declare -r  AUTHOR_EXPERIENCE_LOCK_FILE=$WORKSPACE_DIR/AUTHOR_EXPERIENCE_LOCK.txt
 declare -ri RECENT_DAY_DIFF=30
 
 update_author_project_commits() {
@@ -408,7 +407,7 @@ insert_author_experience() {
 
                  /* AUTHOR_RECENT_PROJECT_COMMITS               = */ $author_recent_project_commits);
         "
-    }) 222>$AUTHOR_EXPERIENCE_LOCK_SOURCE_FILE
+    }) 222>$AUTHOR_EXPERIENCE_LOCK_FILE
 
     popd
 }
@@ -428,9 +427,9 @@ run_query '
            ON COMMIT_TIME_DIFFS.ISSUE_KEY = AUTHOR_EXPERIENCE.ISSUE_KEY
         WHERE AUTHOR_EXPERIENCE.ISSUE_KEY IS NULL
      ORDER BY COMMIT_TIME_DIFFS.ISSUE_KEY;
-' '|' > $AUTHOR_EXPERIENCE_QUEUE_SOURCE_FILE
+' '|' > $AUTHOR_EXPERIENCE_QUEUE_FILE
 
-declare -ri NUM_ISSUES=$(wc -l < $AUTHOR_EXPERIENCE_QUEUE_SOURCE_FILE)
+declare -ri NUM_ISSUES=$(wc -l < $AUTHOR_EXPERIENCE_QUEUE_FILE)
 declare -i  ISSUE_INDEX=0
 while IFS='|' read issue_key            \
                    project_id           \
@@ -460,7 +459,7 @@ do
     fi
     [ $( jobs | wc -l ) -ge $( nproc ) ] && wait
     log "DONE processing \"$issue_key\" $ISSUE_INDEX/$NUM_ISSUES"
-done < $AUTHOR_EXPERIENCE_QUEUE_SOURCE_FILE
+done < $AUTHOR_EXPERIENCE_QUEUE_FILE
 
 wait
 log "DONE"
