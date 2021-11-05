@@ -5,35 +5,48 @@ declare -r THIS_SCRIPT_DIR="$(cd -- "$(dirname "$0")" >/dev/null 2>&1; pwd -P)"
 
 . $THIS_SCRIPT_DIR/common.bash
 
-update_project_commit_rule_violations() {
-    local -r project_id=$1
-    local -r commit_hash=$2
-    local -r rule=$3
-    local -r count=$4
-
-    run_query "
-        INSERT OR IGNORE INTO PROJECT_COMMIT_RULE_VIOLATIONS
-            (PROJECT_ID, COMMIT_HASH)
-        VALUES
-            (\"$project_id\", \"$commit_hash\");
-    "
-    run_query "
-        UPDATE PROJECT_COMMIT_RULE_VIOLATIONS
-           SET \`$rule\` = \`$rule\` + $count
-         WHERE PROJECT_ID  = \"$project_id\"  AND
-               COMMIT_HASH = \"$commit_hash\";
-    "
-}
-
-while read project_id commit_hash rule count
-do
-    update_project_commit_rule_violations "$project_id" "$commit_hash" "$rule" "$count"
-done <<< $(run_query '
-      SELECT PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT(*) AS COUNT
-        FROM COMMIT_TIME_DIFFS
-    GROUP BY PROJECT_ID, CREATION_COMMIT_HASH, RULE
-    ORDER BY PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT;
-' )
+# declare -r PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE=$WORKSPACE_DIR/PROJECT_COMMIT_RULE_VIOLATIONS_LOCK.txt
+# 
+# update_project_commit_rule_violations() {
+#     local -r project_id=$1
+#     local -r commit_hash=$2
+#     local -r rule=$3
+#     local -r count=$4
+# 
+#     local -ri lock_fd=222
+#     (flock $lock_fd
+#     {
+#         run_query "
+#             INSERT OR IGNORE INTO PROJECT_COMMIT_RULE_VIOLATIONS
+#                 (PROJECT_ID, COMMIT_HASH)
+#             VALUES
+#                 (\"$project_id\", \"$commit_hash\");
+#         "
+#     }) 222>$PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE
+#     (flock $lock_fd
+#     {
+#         run_query "
+#             UPDATE PROJECT_COMMIT_RULE_VIOLATIONS
+#                SET \`$rule\` = \`$rule\` + $count
+#              WHERE PROJECT_ID  = \"$project_id\"  AND
+#                    COMMIT_HASH = \"$commit_hash\";
+#         "
+#     }) 222>$PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE
+# }
+# 
+# while read project_id commit_hash rule count
+# do
+#     update_project_commit_rule_violations "$project_id" "$commit_hash" "$rule" "$count" &
+#     [ $( jobs | wc -l ) -ge $( nproc ) ] && wait
+# done <<< $(run_query '
+#       SELECT PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT(*) AS COUNT
+#         FROM COMMIT_TIME_DIFFS
+#     GROUP BY PROJECT_ID, CREATION_COMMIT_HASH, RULE
+#     ORDER BY PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT;
+# ' )
+# 
+# wait
+# log "DONE"
 
 run_query '
     DROP TABLE IF EXISTS PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL;
@@ -48,10 +61,69 @@ run_query '
     CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
         PROJECT_ID                              TEXT               NOT NULL, 
         COMMIT_HASH                             TEXT    DEFAULT "" NOT NULL, 
+        COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 
+        AUTHOR                                  TEXT    DEFAULT "" NOT NULL, 
         ANALYSIS_KEY                            TEXT    DEFAULT "" NOT NULL,
         SQALE_INDEX                             INTEGER DEFAULT 0  NOT NULL,
         IS_FAULT_INDUCING                       INTEGER DEFAULT 0  NOT NULL,
         IS_FAULT_FIXING                         INTEGER DEFAULT 0  NOT NULL,
+        NUM_FILES                               INTEGER DEFAULT 0  NOT NULL,
+        NUM_DIRECTORIES                         INTEGER DEFAULT 0  NOT NULL,
+        NUM_LINE_ADDITIONS                      INTEGER DEFAULT 0  NOT NULL,
+        NUM_LINE_SUBTRACTIONS                   INTEGER DEFAULT 0  NOT NULL,
+        NUM_LINE_CHANGES                        INTEGER DEFAULT 0  NOT NULL,
+        NUM_SOURCE_FILES                        INTEGER DEFAULT 0  NOT NULL,
+        NUM_SOURCE_DIRECTORIES                  INTEGER DEFAULT 0  NOT NULL,
+        NUM_SOURCE_LINE_ADDITIONS               INTEGER DEFAULT 0  NOT NULL,
+        NUM_SOURCE_LINE_SUBTRACTIONS            INTEGER DEFAULT 0  NOT NULL,
+        NUM_SOURCE_LINE_CHANGES                 INTEGER DEFAULT 0  NOT NULL,
+
+        TOTAL_HOURS_SINCE_LAST_TOUCH                INTEGER,
+        TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT      INTEGER NOT NULL,
+
+        TOTAL_SOURCE_FILE_COMMITS                   INTEGER NOT NULL,
+        TOTAL_SOURCE_FILE_LINE_ADDITIONS            INTEGER NOT NULL,
+        TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS         INTEGER NOT NULL,
+        TOTAL_SOURCE_FILE_LINE_CHANGES              INTEGER NOT NULL,
+
+        TOTAL_PROJECT_COMMITS                       INTEGER NOT NULL,
+        TOTAL_PROJECT_LINE_ADDITIONS                INTEGER NOT NULL, -- NEW
+        TOTAL_PROJECT_LINE_SUBTRACTIONS             INTEGER NOT NULL, -- NEW
+        TOTAL_PROJECT_LINE_CHANGES                  INTEGER NOT NULL, -- NEW
+
+        TOTAL_RECENT_SOURCE_FILE_COMMITS            INTEGER NOT NULL,
+        TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS     INTEGER NOT NULL,
+        TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS  INTEGER NOT NULL,
+        TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES       INTEGER NOT NULL,
+
+        TOTAL_RECENT_PROJECT_COMMITS                INTEGER NOT NULL,
+        TOTAL_RECENT_PROJECT_LINE_ADDITIONS         INTEGER NOT NULL, -- NEW
+        TOTAL_RECENT_PROJECT_LINE_SUBTRACTIONS      INTEGER NOT NULL, -- NEW
+        TOTAL_RECENT_PROJECT_LINE_CHANGES           INTEGER NOT NULL, -- NEW
+
+        AUTHOR_HOURS_SINCE_LAST_TOUCH               INTEGER,
+        AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT     INTEGER NOT NULL,
+
+        AUTHOR_SOURCE_FILE_COMMITS                  INTEGER NOT NULL,
+        AUTHOR_SOURCE_FILE_LINE_ADDITIONS           INTEGER NOT NULL,
+        AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS        INTEGER NOT NULL,
+        AUTHOR_SOURCE_FILE_LINE_CHANGES             INTEGER NOT NULL,
+
+        AUTHOR_PROJECT_COMMITS                      INTEGER NOT NULL,
+        AUTHOR_PROJECT_LINE_ADDITIONS               INTEGER NOT NULL, -- NEW
+        AUTHOR_PROJECT_LINE_SUBTRACTIONS            INTEGER NOT NULL, -- NEW
+        AUTHOR_PROJECT_LINE_CHANGES                 INTEGER NOT NULL, -- NEW
+
+        AUTHOR_RECENT_SOURCE_FILE_COMMITS           INTEGER NOT NULL,
+        AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS    INTEGER NOT NULL,
+        AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS INTEGER NOT NULL,
+        AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES      INTEGER NOT NULL,
+
+        AUTHOR_RECENT_PROJECT_COMMITS               INTEGER NOT NULL,
+        AUTHOR_RECENT_PROJECT_LINE_ADDITIONS        INTEGER NOT NULL, -- NEW
+        AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS     INTEGER NOT NULL, -- NEW
+        AUTHOR_RECENT_PROJECT_LINE_CHANGES          INTEGER NOT NULL, -- NEW
+
         `squid:AssignmentInSubExpressionCheck`  INTEGER DEFAULT 0  NOT NULL,
         `squid:ClassCyclomaticComplexity`       INTEGER DEFAULT 0  NOT NULL,
         `squid:CommentedOutCodeLine`            INTEGER DEFAULT 0  NOT NULL,
@@ -177,10 +249,68 @@ run_query '
     INSERT OR IGNORE INTO PROJECT_COMMIT_RULE_VIOLATIONS
             SELECT PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.PROJECT_ID,
                    PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.COMMIT_HASH,
+                   AUTHOR_EXPERIENCE.COMMIT_DATE,
+                   AUTHOR_EXPERIENCE.AUTHOR,
                    AUTHOR_EXPERIENCE.ANALYSIS_KEY,
                    AUTHOR_EXPERIENCE.SQALE_INDEX,
                    AUTHOR_EXPERIENCE.IS_FAULT_INDUCING,
                    AUTHOR_EXPERIENCE.IS_FAULT_FIXING,
+                   /* NUM_FILES                    = */ 0,
+                   /* NUM_DIRECTORIES              = */ 0,
+                   GIT_COMMITS_CHANGES.LINES_ADDED,
+                   GIT_COMMITS_CHANGES.LINES_REMOVED,
+                   GIT_COMMITS_CHANGES.LINES_ADDED + GIT_COMMITS_CHANGES.LINES_REMOVED,
+                   /* NUM_SOURCE_FILES             = */ 0,
+                   /* NUM_SOURCE_DIRECTORIES       = */ 0,
+                   /* NUM_SOURCE_LINE_ADDITIONS    = */ 0,
+                   /* NUM_SOURCE_LINE_SUBTRACTIONS = */ 0,
+                   /* NUM_SOURCE_LINE_CHANGES      = */ 0,
+                   AUTHOR_EXPERIENCE.TOTAL_HOURS_SINCE_LAST_TOUCH,
+                   AUTHOR_EXPERIENCE.TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT,
+
+                   AUTHOR_EXPERIENCE.TOTAL_SOURCE_FILE_COMMITS,
+                   AUTHOR_EXPERIENCE.TOTAL_SOURCE_FILE_LINE_ADDITIONS,
+                   AUTHOR_EXPERIENCE.TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS,
+                   AUTHOR_EXPERIENCE.TOTAL_SOURCE_FILE_LINE_CHANGES,
+
+                   AUTHOR_EXPERIENCE.TOTAL_PROJECT_COMMITS,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_LINE_ADDITIONS    = */ 0,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_LINE_SUBTRACTIONS = */ 0,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_LINE_CHANGES      = */ 0,
+
+                   AUTHOR_EXPERIENCE.TOTAL_RECENT_SOURCE_FILE_COMMITS,
+                   AUTHOR_EXPERIENCE.TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS,
+                   AUTHOR_EXPERIENCE.TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS,
+                   AUTHOR_EXPERIENCE.TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES,
+
+                   AUTHOR_EXPERIENCE.TOTAL_RECENT_PROJECT_COMMITS,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_RECENT_LINE_ADDITIONS    = */ 0,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_RECENT_LINE_SUBTRACTIONS = */ 0,
+                   /* AUTHOR_EXPERIENCE.TOTAL_PROJECT_RECENT_LINE_CHANGES      = */ 0,
+
+                   AUTHOR_EXPERIENCE.AUTHOR_HOURS_SINCE_LAST_TOUCH,
+                   AUTHOR_EXPERIENCE.AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT,
+
+                   AUTHOR_EXPERIENCE.AUTHOR_SOURCE_FILE_COMMITS,
+                   AUTHOR_EXPERIENCE.AUTHOR_SOURCE_FILE_LINE_ADDITIONS,
+                   AUTHOR_EXPERIENCE.AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS,
+                   AUTHOR_EXPERIENCE.AUTHOR_SOURCE_FILE_LINE_CHANGES,
+
+                   AUTHOR_EXPERIENCE.AUTHOR_PROJECT_COMMITS,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_PROJECT_LINE_ADDITIONS    = */ 0,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_PROJECT_LINE_SUBTRACTIONS = */ 0,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_PROJECT_LINE_CHANGES      = */ 0,
+
+                   AUTHOR_EXPERIENCE.AUTHOR_RECENT_SOURCE_FILE_COMMITS,
+                   AUTHOR_EXPERIENCE.AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS,
+                   AUTHOR_EXPERIENCE.AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS,
+                   AUTHOR_EXPERIENCE.AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES,
+
+                   AUTHOR_EXPERIENCE.AUTHOR_RECENT_PROJECT_COMMITS,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_RECENT_PROJECT_LINE_ADDITIONS    = */ 0,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS = */ 0,
+                   /* AUTHOR_EXPERIENCE.AUTHOR_RECENT_PROJECT_LINE_CHANGES      = */ 0,
+
                    `squid:AssignmentInSubExpressionCheck`,
                    `squid:ClassCyclomaticComplexity`,
                    `squid:CommentedOutCodeLine`,
@@ -302,6 +432,9 @@ run_query '
         INNER JOIN AUTHOR_EXPERIENCE
                 ON AUTHOR_EXPERIENCE.PROJECT_ID  = PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.PROJECT_ID AND
                    AUTHOR_EXPERIENCE.COMMIT_HASH = PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.COMMIT_HASH
+        INNER JOIN GIT_COMMITS_CHANGES
+                ON GIT_COMMITS_CHANGES.PROJECT_ID  = PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.PROJECT_ID AND
+                   GIT_COMMITS_CHANGES.COMMIT_HASH = PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL.COMMIT_HASH
              WHERE AUTHOR_EXPERIENCE.IS_FIX = 0;
 '
 
