@@ -41,19 +41,17 @@ detailed_commit_history() {
         while read line_additions line_subtractions _file
         do
             # line changes aren't counted for binary source_files
-            if [ "$line_additions" = '-' ]
+            if [ "$line_additions" != '-' ]
             then
-                line_additions=0
+                ((total_line_additions+=line_additions))
             fi
-            if [ "$line_subtractions" = '-' ]
+            if [ "$line_subtractions" != '-' ]
             then
-                line_subtractions=0
+                ((total_line_subtractions+=line_subtractions))
             fi
-            ((total_line_additions+=line_additions)) || true
-            ((total_line_subtractions+=line_subtractions)) || true
         done <<< $(git log --pretty=tformat: --numstat "$@")
     fi
-    let total_line_changes=(total_line_additions+total_line_subtractions) || true
+    let total_line_changes=(total_line_additions+total_line_subtractions) || total_line_changes=0
 
     echo $total_commits $total_line_additions $total_line_subtractions $total_line_changes
 }
@@ -68,7 +66,7 @@ get_first_commit_date() {
     local -r regex_escaped_author="$1"
 
     git log --reverse --author="$regex_escaped_author" --date=format:'%Y-%m-%d %H:%M:%S' |
-    sed '3!d ; s/^Date: \+//'
+    sed -n 's/^Date: \+\(.*\)/\1/p; /^$/q'
 }
 
 hours_since_last_touch() {
@@ -89,7 +87,7 @@ hours_since_last_touch() {
         echo NULL
         return
     fi
-    let delta_hours=($ts_commit - $ts_last_commit)/3600 || true
+    let delta_hours=($ts_commit - $ts_last_commit)/3600 || delta_hours=0
     echo $delta_hours
 }
 
@@ -116,10 +114,10 @@ mine_project_commit() {
     read num_source_files num_source_directories <<< $(get_commit_delta "$project_id" "$commit_hash" -- '*.java')
 
     local -r  total_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$source_file_pattern" ".*")
-    let       total_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$first_commit_date" +%s ))/3600 || true
+    let       total_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$first_commit_date" +%s ))/3600 || total_hours_since_first_project_commit=0
 
     local -r  author_hours_since_last_touch=$(hours_since_last_touch "$commit_hash" "$source_file_pattern" "$regex_escaped_author")
-    let       author_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$author_first_commit_date" +%s ))/3600 || true
+    let       author_hours_since_first_project_commit=($(date -d "$commit_date" +%s)-$(date -d "$author_first_commit_date" +%s ))/3600 || author_hours_since_first_project_commit=0
 
     read num_commits           \
          num_line_additions    \
@@ -294,12 +292,14 @@ mine_project_commit() {
     }) 222>$PROJECT_COMMITS_LOCK_FILE
 }
 
-run_query 'DELETE FROM PROJECT_COMMIT_RULE_VIOLATIONS;'
-
 run_query '
-      SELECT PROJECT_ID, COMMIT_HASH, AUTHOR, AUTHOR_DATE
+      SELECT GIT_COMMITS.PROJECT_ID, GIT_COMMITS.COMMIT_HASH, GIT_COMMITS.AUTHOR, GIT_COMMITS.AUTHOR_DATE
         FROM GIT_COMMITS
-    ORDER BY PROJECT_ID, COMMIT_HASH, AUTHOR, AUTHOR_DATE;
+   LEFT JOIN PROJECT_COMMIT_RULE_VIOLATIONS
+          ON (GIT_COMMITS.PROJECT_ID  = PROJECT_COMMIT_RULE_VIOLATIONS.PROJECT_ID AND
+              GIT_COMMITS.COMMIT_HASH = PROJECT_COMMIT_RULE_VIOLATIONS.COMMIT_HASH)
+       WHERE PROJECT_COMMIT_RULE_VIOLATIONS.PROJECT_ID IS NULL
+    ORDER BY GIT_COMMITS.PROJECT_ID, GIT_COMMITS.COMMIT_HASH, GIT_COMMITS.AUTHOR, GIT_COMMITS.AUTHOR_DATE;
 ' '|' > $GIT_COMMITS_QUEUE_FILE
 declare -ri NUM_LINES=$(wc -l < $GIT_COMMITS_QUEUE_FILE)
 declare -i  LINE=0
