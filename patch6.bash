@@ -482,45 +482,43 @@ run_query '
     DROP TABLE PROJECT_COMMIT_RULE_VIOLATIONS_ORIGINAL;
 '
 
-# declare -r PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE=$WORKSPACE_DIR/PROJECT_COMMIT_RULE_VIOLATIONS_LOCK.txt
-# 
-# update_project_commit_rule_violations() {
-#     local -r project_id=$1
-#     local -r commit_hash=$2
-#     local -r rule=$3
-#     local -r count=$4
-# 
-#     local -ri lock_fd=222
-#     (flock $lock_fd
-#     {
-#         run_query "
-#             INSERT OR IGNORE INTO PROJECT_COMMIT_RULE_VIOLATIONS
-#                 (PROJECT_ID, COMMIT_HASH)
-#             VALUES
-#                 (\"$project_id\", \"$commit_hash\");
-#         "
-#     }) 222>$PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE
-#     (flock $lock_fd
-#     {
-#         run_query "
-#             UPDATE PROJECT_COMMIT_RULE_VIOLATIONS
-#                SET \`$rule\` = \`$rule\` + $count
-#              WHERE PROJECT_ID  = \"$project_id\"  AND
-#                    COMMIT_HASH = \"$commit_hash\";
-#         "
-#     }) 222>$PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE
-# }
-# 
-# while read project_id commit_hash rule count
-# do
-#     update_project_commit_rule_violations "$project_id" "$commit_hash" "$rule" "$count" &
-#     [ $( jobs | wc -l ) -ge $( nproc ) ] && wait
-# done <<< $(run_query '
-#       SELECT PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT(*) AS COUNT
-#         FROM COMMIT_TIME_DIFFS
-#     GROUP BY PROJECT_ID, CREATION_COMMIT_HASH, RULE
-#     ORDER BY PROJECT_ID, CREATION_COMMIT_HASH, RULE, COUNT;
-# ' )
-# 
-# wait
-# log "DONE"
+declare -r PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE=$WORKSPACE_DIR/PROJECT_COMMIT_RULE_VIOLATIONS_LOCK.txt
+
+update_project_commit_rule_violations() {
+    local -r project_id=$1
+    local -r commit_hash=$2
+    local -r rule=$3
+    local -r count=$4
+
+    local -ri lock_fd=222
+    (flock $lock_fd
+    {
+        run_query "
+            UPDATE PROJECT_COMMIT_RULE_VIOLATIONS
+               SET \`$rule\` = \`$rule\` + $count
+             WHERE PROJECT_ID  = \"$project_id\"  AND
+                   COMMIT_HASH = \"$commit_hash\";
+        "
+    }) 222>$PROJECT_COMMIT_RULE_VIOLATIONS_LOCK_FILE
+}
+
+while read project_id commit_hash rule count
+do
+    update_project_commit_rule_violations "$project_id" "$commit_hash" "$rule" "$count" &
+    [ $( jobs | wc -l ) -ge $( nproc ) ] && wait
+done <<< $(run_query "
+      SELECT SONAR_ISSUES.PROJECT_ID, SONAR_ANALYSIS.REVISION, SONAR_ISSUES.RULE, COUNT(*) AS COUNT
+        FROM SONAR_ISSUES
+  INNER JOIN SONAR_ANALYSIS
+          ON (SONAR_ISSUES.PROJECT_ID            = SONAR_ANALYSIS.PROJECT_ID AND
+              SONAR_ISSUES.CREATION_ANALYSIS_KEY = SONAR_ANALYSIS.ANALYSIS_KEY)
+       WHERE (SONAR_ISSUES.TYPE  = 'CODE_SMELL'  AND
+              (SONAR_ISSUES.RULE =    'common-java' OR
+               SONAR_ISSUES.RULE LIKE 'squid:%'))
+    GROUP BY SONAR_ISSUES.PROJECT_ID, SONAR_ANALYSIS.REVISION, SONAR_ISSUES.RULE
+    ORDER BY SONAR_ISSUES.PROJECT_ID, SONAR_ANALYSIS.REVISION, SONAR_ISSUES.RULE, COUNT;
+" )
+
+wait
+log "DONE"
+
