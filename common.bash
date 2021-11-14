@@ -333,7 +333,7 @@ run_query '
 '
 
 run_query '
-    CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATISTICS (
+    CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATS (
         PROJECT_ID                              TEXT               NOT NULL, 
         COMMIT_HASH                             TEXT    DEFAULT "" NOT NULL, 
         COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 

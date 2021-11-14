@@ -11,6 +11,7 @@ This repository contains tools and notes for directed research based on
     - [`AUTHOR_PROJECT_SOURCE_FILE_CHANGES`](#author_project_source_file_changes)
     - [`AUTHOR_EXPERIENCE`](#author_experience)
     - [`PROJECT_STATS`](#project_stats)
+    - [`PROJECT_COMMIT_STATS`](#project_commit_stats)
     - [`PROJECT_COMMIT_RULE_VIOLATIONS`](#project_commit_rule_violations)
 - [Generate Auxillary Tables](#generate-auxillary-tables)
 
@@ -372,6 +373,147 @@ Sample row:
 $ sqlite3 -header td_V2.db 'SELECT * FROM PROJECT_STATS LIMIT 1;'
 PROJECT_ID|FILES|SOURCE_FILES|LINES|SOURCE_FILE_LINES|COMMITS|SOURCE_FILE_COMMITS
 org.apache:archiva|3208|3208|421594|189286|8695|4222
+### PROJECT_COMMIT_STATS
+`PROJECT_COMMIT_STATS` is a collection of stats about a project commit, as well
+as stats that describe the state of the project at the time of the commit.
+
+Schema:
+```
+CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATS (
+    PROJECT_ID                              TEXT              NOT NULL, 
+        -- The project.
+
+    COMMIT_HASH                             TEXT              NOT NULL, 
+        -- The commit.
+
+    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 
+        -- Date of 'COMMIT_HASH'.
+
+    AUTHOR                                  TEXT    DEFAULT "" NOT NULL, 
+        -- Author of 'COMMIT_HASH'.
+
+    NUM_FILES                               INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of files touched in 'COMMIT_HASH'.
+
+    NUM_DIRECTORIES                         INTEGER DEFAULT 0  NOT NULL,
+        -- Number of unique directories containing all files touched in
+        -- 'COMMIT_HASH'.
+
+    NUM_LINE_ADDITIONS                      INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines added in 'COMMIT_HASH'.
+
+    NUM_LINE_SUBTRACTIONS                   INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines removed in 'COMMIT_HASH'.
+
+    NUM_LINE_CHANGES                        INTEGER DEFAULT 0  NOT NULL,
+        -- 'NUM_LINE_ADDITIONS + NUM_LINE_SUBTRACTIONS'
+
+    NUM_SOURCE_FILES                        INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of files touched in 'COMMIT_HASH' that are targeted by
+        -- sonar qube code smell rules (java files).
+
+    NUM_SOURCE_DIRECTORIES                  INTEGER DEFAULT 0  NOT NULL,
+        -- Number of unique directories containing source (java) files touched
+        -- in 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_ADDITIONS                      INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines added to source (java) files in 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_SUBTRACTIONS                   INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines removed from source (java) files in
+        -- 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_CHANGES                        INTEGER DEFAULT 0  NOT NULL,
+        -- 'NUM_SOURCE_LINE_ADDITIONS + NUM_SOURCE_LINE_SUBTRACTIONS'.
+
+    TOTAL_HOURS_SINCE_LAST_TOUCH                INTEGER,
+        -- Hours since the commit previous to 'COMMIT_HASH' was authored, or
+        -- 'NULL' if 'COMMIT_HASH' is the first commit.
+
+    TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT      INTEGER NOT NULL,
+        -- Hours since the first project commit at the time of 'COMMIT_HASH'.
+        -- This column will be '0' if 'COMMIT_HASH' is the first project commit.
+
+    TOTAL_SOURCE_FILE_COMMITS                   INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_ADDITIONS            INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS         INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_CHANGES              INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author to source (java) files at the time of 'COMMIT_HASH'
+        -- (exluding 'COMMIT_HASH').
+
+    TOTAL_PROJECT_COMMITS                       INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_ADDITIONS                INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_SUBTRACTIONS             INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_CHANGES                  INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author at the time of 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    TOTAL_RECENT_SOURCE_FILE_COMMITS            INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS     INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS  INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES       INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author to source (java) files *within 30 days of* the time of
+        -- 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    TOTAL_RECENT_PROJECT_COMMITS                INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_ADDITIONS         INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_SUBTRACTIONS      INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_CHANGES           INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author *within 30 days of* the time of 'COMMIT_HASH' (exluding
+        -- 'COMMIT_HASH').
+
+    AUTHOR_HOURS_SINCE_LAST_TOUCH                INTEGER,
+        -- Hours since the last commit by 'AUTHOR' prior to 'COMMIT_HASH', or
+        -- 'NULL' if 'COMMIT_HASH' is the first commit.
+
+    AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT      INTEGER NOT NULL,
+        -- Hours since the first project commit by 'AUTHOR' at the time of
+        -- 'COMMIT_HASH'.  This column will be '0' if 'COMMIT_HASH' is the
+        -- first project commit.
+
+    AUTHOR_SOURCE_FILE_COMMITS                  INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_ADDITIONS           INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS        INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_CHANGES             INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' to source (java) files at the time of 'COMMIT_HASH'
+        -- (exluding 'COMMIT_HASH').
+
+    AUTHOR_PROJECT_COMMITS                      INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_ADDITIONS               INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_SUBTRACTIONS            INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_CHANGES                 INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' at the time of 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    AUTHOR_RECENT_SOURCE_FILE_COMMITS           INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS    INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES      INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' to source (java) files *within 30 days of* the time of
+        -- 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    AUTHOR_RECENT_PROJECT_COMMITS               INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_ADDITIONS        INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS     INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_CHANGES          INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' *within 30 days of* the time of 'COMMIT_HASH' (exluding
+        -- 'COMMIT_HASH').
+
+    PRIMARY KEY (PROJECT_ID, COMMIT_HASH)
+);
+```
+Sample row:
+```
+$ sqlite3 -header td_V2.db 'SELECT * FROM PROJECT_COMMIT_STATS LIMIT 1;'
+PROJECT_ID|COMMIT_HASH|COMMIT_DATE|AUTHOR|NUM_FILES|NUM_DIRECTORIES|NUM_LINE_ADDITIONS|NUM_LINE_SUBTRACTIONS|NUM_LINE_CHANGES|NUM_SOURCE_FILES|NUM_SOURCE_DIRECTORIES|NUM_SOURCE_LINE_ADDITIONS|NUM_SOURCE_LINE_SUBTRACTIONS|NUM_SOURCE_LINE_CHANGES|TOTAL_HOURS_SINCE_LAST_TOUCH|TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT|TOTAL_SOURCE_FILE_COMMITS|TOTAL_SOURCE_FILE_LINE_ADDITIONS|TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS|TOTAL_SOURCE_FILE_LINE_CHANGES|TOTAL_PROJECT_COMMITS|TOTAL_PROJECT_LINE_ADDITIONS|TOTAL_PROJECT_LINE_SUBTRACTIONS|TOTAL_PROJECT_LINE_CHANGES|TOTAL_RECENT_SOURCE_FILE_COMMITS|TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS|TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS|TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES|TOTAL_RECENT_PROJECT_COMMITS|TOTAL_RECENT_PROJECT_LINE_ADDITIONS|TOTAL_RECENT_PROJECT_LINE_SUBTRACTIONS|TOTAL_RECENT_PROJECT_LINE_CHANGES|AUTHOR_HOURS_SINCE_LAST_TOUCH|AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT|AUTHOR_SOURCE_FILE_COMMITS|AUTHOR_SOURCE_FILE_LINE_ADDITIONS|AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS|AUTHOR_SOURCE_FILE_LINE_CHANGES|AUTHOR_PROJECT_COMMITS|AUTHOR_PROJECT_LINE_ADDITIONS|AUTHOR_PROJECT_LINE_SUBTRACTIONS|AUTHOR_PROJECT_LINE_CHANGES|AUTHOR_RECENT_SOURCE_FILE_COMMITS|AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS|AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS|AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES|AUTHOR_RECENT_PROJECT_COMMITS|AUTHOR_RECENT_PROJECT_LINE_ADDITIONS|AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS|AUTHOR_RECENT_PROJECT_LINE_CHANGES
+org.apache:archiva|005800c3403199937c105999523a0225bd73a1f1|2006-05-30 06:38:12+00:00|Ernesto S. Tolentino Jr|1|1|1|1|2|0|0|30534|11936|42470|1527|4489|217|30534|11936|42470|257|34759|12854|47613|0|0|0|0|2|88|23|111||-4|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0
+```
 ```
 ### PROJECT_COMMIT_RULE_VIOLATIONS
 `PROJECT_COMMIT_RULE_VIOLATIONS` summarizes the number of sonar qube code smell
@@ -386,18 +528,26 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
     COMMIT_HASH                             TEXT              NOT NULL, 
         -- The commit.
 
+    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 
+        -- Date of 'COMMIT_HASH'.
+
+    AUTHOR                                  TEXT    DEFAULT "" NOT NULL, 
+        -- Author of 'COMMIT_HASH'.
+
     ANALYSIS_KEY                            TEXT              NOT NULL,
-        -- Foreign key to the analysis on this commit ('SONAR_ANALYSIS',
+        -- Foreign key to the analysis on 'COMMIT_HASH' ('SONAR_ANALYSIS',
         -- 'SONAR_MEASURES').
 
     SQALE_INDEX                             INTEGER           NOT NULL,
-        -- Sonar qube measure of project-wide technical debt after this commit.
+        -- Sonar qube measure of project-wide technical debt after
+        -- 'COMMIT_HASH'.
 
     IS_FAULT_INDUCING                           INTEGER NOT NULL,
-        -- '1' if this commit introduced at least 1 JIRA_ISSUE, '0' otherwise.
+        -- '1' if 'COMMIT_HASH' introduced at least 1 JIRA_ISSUE, '0'
+        -- otherwise.
 
     IS_FAULT_FIXING                             INTEGER NOT NULL,
-        -- '1' if this commit fixed at least 1 JIRA_ISSUE, '0' otherwise.
+        -- '1' if 'COMMIT_HASH' fixed at least 1 JIRA_ISSUE, '0' otherwise.
 
     NUM_FILES                               INTEGER DEFAULT 0  NOT NULL,
         -- Total number of files touched in 'COMMIT_HASH'.
@@ -406,6 +556,15 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
         -- Number of unique directories containing all files touched in
         -- 'COMMIT_HASH'.
 
+    NUM_LINE_ADDITIONS                      INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines added in 'COMMIT_HASH'.
+
+    NUM_LINE_SUBTRACTIONS                   INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines removed in 'COMMIT_HASH'.
+
+    NUM_LINE_CHANGES                        INTEGER DEFAULT 0  NOT NULL,
+        -- 'NUM_LINE_ADDITIONS + NUM_LINE_SUBTRACTIONS'
+
     NUM_SOURCE_FILES                        INTEGER DEFAULT 0  NOT NULL,
         -- Total number of files touched in 'COMMIT_HASH' that are targeted by
         -- sonar qube code smell rules (java files).
@@ -413,6 +572,95 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
     NUM_SOURCE_DIRECTORIES                  INTEGER DEFAULT 0  NOT NULL,
         -- Number of unique directories containing source (java) files touched
         -- in 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_ADDITIONS                      INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines added to source (java) files in 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_SUBTRACTIONS                   INTEGER DEFAULT 0  NOT NULL,
+        -- Total number of lines removed from source (java) files in
+        -- 'COMMIT_HASH'.
+
+    NUM_SOURCE_LINE_CHANGES                        INTEGER DEFAULT 0  NOT NULL,
+        -- 'NUM_SOURCE_LINE_ADDITIONS + NUM_SOURCE_LINE_SUBTRACTIONS'.
+
+    TOTAL_HOURS_SINCE_LAST_TOUCH                INTEGER,
+        -- Hours since the commit previous to 'COMMIT_HASH' was authored, or
+        -- 'NULL' if 'COMMIT_HASH' is the first commit.
+
+    TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT      INTEGER NOT NULL,
+        -- Hours since the first project commit at the time of 'COMMIT_HASH'.
+        -- This column will be '0' if 'COMMIT_HASH' is the first project commit.
+
+    TOTAL_SOURCE_FILE_COMMITS                   INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_ADDITIONS            INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS         INTEGER NOT NULL,
+    TOTAL_SOURCE_FILE_LINE_CHANGES              INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author to source (java) files at the time of 'COMMIT_HASH'
+        -- (exluding 'COMMIT_HASH').
+
+    TOTAL_PROJECT_COMMITS                       INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_ADDITIONS                INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_SUBTRACTIONS             INTEGER NOT NULL,
+    TOTAL_PROJECT_LINE_CHANGES                  INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author at the time of 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    TOTAL_RECENT_SOURCE_FILE_COMMITS            INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS     INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS  INTEGER NOT NULL,
+    TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES       INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author to source (java) files *within 30 days of* the time of
+        -- 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    TOTAL_RECENT_PROJECT_COMMITS                INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_ADDITIONS         INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_SUBTRACTIONS      INTEGER NOT NULL,
+    TOTAL_RECENT_PROJECT_LINE_CHANGES           INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- any author *within 30 days of* the time of 'COMMIT_HASH' (exluding
+        -- 'COMMIT_HASH').
+
+    AUTHOR_HOURS_SINCE_LAST_TOUCH                INTEGER,
+        -- Hours since the last commit by 'AUTHOR' prior to 'COMMIT_HASH', or
+        -- 'NULL' if 'COMMIT_HASH' is the first commit.
+
+    AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT      INTEGER NOT NULL,
+        -- Hours since the first project commit by 'AUTHOR' at the time of
+        -- 'COMMIT_HASH'.  This column will be '0' if 'COMMIT_HASH' is the
+        -- first project commit.
+
+    AUTHOR_SOURCE_FILE_COMMITS                  INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_ADDITIONS           INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS        INTEGER NOT NULL,
+    AUTHOR_SOURCE_FILE_LINE_CHANGES             INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' to source (java) files at the time of 'COMMIT_HASH'
+        -- (exluding 'COMMIT_HASH').
+
+    AUTHOR_PROJECT_COMMITS                      INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_ADDITIONS               INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_SUBTRACTIONS            INTEGER NOT NULL,
+    AUTHOR_PROJECT_LINE_CHANGES                 INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' at the time of 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    AUTHOR_RECENT_SOURCE_FILE_COMMITS           INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS    INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS INTEGER NOT NULL,
+    AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES      INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' to source (java) files *within 30 days of* the time of
+        -- 'COMMIT_HASH' (exluding 'COMMIT_HASH').
+
+    AUTHOR_RECENT_PROJECT_COMMITS               INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_ADDITIONS        INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS     INTEGER NOT NULL,
+    AUTHOR_RECENT_PROJECT_LINE_CHANGES          INTEGER NOT NULL,
+        -- Total number of commits, line additions/subtractions/changes by
+        -- 'AUTHOR' *within 30 days of* the time of 'COMMIT_HASH' (exluding
+        -- 'COMMIT_HASH').
 
     ---------------------------------------------------------------------
     -- The following columns count the number of sonar qube violations --
@@ -542,8 +790,8 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
 Sample row:
 ```
 $ sqlite3 -header td_V2.db 'SELECT * FROM PROJECT_COMMIT_RULE_VIOLATIONS LIMIT 1;'
-PROJECT_ID|COMMIT_HASH|ANALYSIS_KEY|SQALE_INDEX|IS_FAULT_INDUCING|IS_FAULT_FIXING|squid:AssignmentInSubExpressionCheck|squid:ClassCyclomaticComplexity|squid:CommentedOutCodeLine|squid:EmptyStatementUsageCheck|squid:ForLoopCounterChangedCheck|squid:HiddenFieldCheck|squid:LabelsShouldNotBeUsedCheck|squid:MethodCyclomaticComplexity|squid:MissingDeprecatedCheck|squid:ModifiersOrderCheck|squid:RedundantThrowsDeclarationCheck|squid:RightCurlyBraceStartLineCheck|squid:S00100|squid:S00101|squid:S00105|squid:S00107|squid:S00108|squid:S00112|squid:S00114|squid:S00115|squid:S00116|squid:S00117|squid:S00119|squid:S00120|squid:S00122|squid:S106|squid:S1065|squid:S1066|squid:S1067|squid:S1068|squid:S1118|squid:S1125|squid:S1126|squid:S1132|squid:S1133|squid:S1134|squid:S1135|squid:S1141|squid:S1147|squid:S1149|squid:S1150|squid:S1151|squid:S1153|squid:S1155|squid:S1157|squid:S1158|squid:S1160|squid:S1161|squid:S1163|squid:S1165|squid:S1166|squid:S1168|squid:S1170|squid:S1171|squid:S1172|squid:S1174|squid:S1181|squid:S1185|squid:S1186|squid:S1188|squid:S1190|squid:S1191|squid:S1192|squid:S1193|squid:S1194|squid:S1195|squid:S1197|squid:S1199|squid:S1213|squid:S1214|squid:S1215|squid:S1219|squid:S1220|squid:S1223|squid:S1226|squid:S128|squid:S1301|squid:S1312|squid:S1314|squid:S1319|squid:S134|squid:S135|squid:S1452|squid:S1479|squid:S1481|squid:S1488|squid:S1596|squid:S1598|squid:S1700|squid:S1905|squid:S1994|squid:S2065|squid:S2094|squid:S2130|squid:S2131|squid:S2133|squid:S2160|squid:S2165|squid:S2166|squid:S2176|squid:S2178|squid:S2232|squid:S2235|squid:S2250|squid:S2274|squid:S2326|squid:S2388|squid:S2437|squid:S2438|squid:S2440|squid:S2442|squid:S2447|squid:S888|squid:SwitchLastCaseIsDefaultCheck|squid:UnusedPrivateMethod|squid:UselessImportCheck|squid:UselessParenthesesCheck
-org.apache:archiva|00ea26352a50a95b2f9ae661c3992053e7642f98|AV0-0TCKt6tne_r58pS9|223935|1|0|0|0|0|0|0|0|0|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|4|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|1|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0
+PROJECT_ID|COMMIT_HASH|COMMIT_DATE|AUTHOR|ANALYSIS_KEY|SQALE_INDEX|IS_FAULT_INDUCING|IS_FAULT_FIXING|NUM_FILES|NUM_DIRECTORIES|NUM_LINE_ADDITIONS|NUM_LINE_SUBTRACTIONS|NUM_LINE_CHANGES|NUM_SOURCE_FILES|NUM_SOURCE_DIRECTORIES|NUM_SOURCE_LINE_ADDITIONS|NUM_SOURCE_LINE_SUBTRACTIONS|NUM_SOURCE_LINE_CHANGES|TOTAL_HOURS_SINCE_LAST_TOUCH|TOTAL_HOURS_SINCE_FIRST_PROJECT_COMMIT|TOTAL_SOURCE_FILE_COMMITS|TOTAL_SOURCE_FILE_LINE_ADDITIONS|TOTAL_SOURCE_FILE_LINE_SUBTRACTIONS|TOTAL_SOURCE_FILE_LINE_CHANGES|TOTAL_PROJECT_COMMITS|TOTAL_PROJECT_LINE_ADDITIONS|TOTAL_PROJECT_LINE_SUBTRACTIONS|TOTAL_PROJECT_LINE_CHANGES|TOTAL_RECENT_SOURCE_FILE_COMMITS|TOTAL_RECENT_SOURCE_FILE_LINE_ADDITIONS|TOTAL_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS|TOTAL_RECENT_SOURCE_FILE_LINE_CHANGES|TOTAL_RECENT_PROJECT_COMMITS|TOTAL_RECENT_PROJECT_LINE_ADDITIONS|TOTAL_RECENT_PROJECT_LINE_SUBTRACTIONS|TOTAL_RECENT_PROJECT_LINE_CHANGES|AUTHOR_HOURS_SINCE_LAST_TOUCH|AUTHOR_HOURS_SINCE_FIRST_PROJECT_COMMIT|AUTHOR_SOURCE_FILE_COMMITS|AUTHOR_SOURCE_FILE_LINE_ADDITIONS|AUTHOR_SOURCE_FILE_LINE_SUBTRACTIONS|AUTHOR_SOURCE_FILE_LINE_CHANGES|AUTHOR_PROJECT_COMMITS|AUTHOR_PROJECT_LINE_ADDITIONS|AUTHOR_PROJECT_LINE_SUBTRACTIONS|AUTHOR_PROJECT_LINE_CHANGES|AUTHOR_RECENT_SOURCE_FILE_COMMITS|AUTHOR_RECENT_SOURCE_FILE_LINE_ADDITIONS|AUTHOR_RECENT_SOURCE_FILE_LINE_SUBTRACTIONS|AUTHOR_RECENT_SOURCE_FILE_LINE_CHANGES|AUTHOR_RECENT_PROJECT_COMMITS|AUTHOR_RECENT_PROJECT_LINE_ADDITIONS|AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS|AUTHOR_RECENT_PROJECT_LINE_CHANGES|squid:AssignmentInSubExpressionCheck|squid:ClassCyclomaticComplexity|squid:CommentedOutCodeLine|squid:EmptyStatementUsageCheck|squid:ForLoopCounterChangedCheck|squid:HiddenFieldCheck|squid:LabelsShouldNotBeUsedCheck|squid:MethodCyclomaticComplexity|squid:MissingDeprecatedCheck|squid:ModifiersOrderCheck|squid:RedundantThrowsDeclarationCheck|squid:RightCurlyBraceStartLineCheck|squid:S00100|squid:S00101|squid:S00105|squid:S00107|squid:S00108|squid:S00112|squid:S00114|squid:S00115|squid:S00116|squid:S00117|squid:S00119|squid:S00120|squid:S00122|squid:S106|squid:S1065|squid:S1066|squid:S1067|squid:S1068|squid:S1118|squid:S1125|squid:S1126|squid:S1132|squid:S1133|squid:S1134|squid:S1135|squid:S1141|squid:S1147|squid:S1149|squid:S1150|squid:S1151|squid:S1153|squid:S1155|squid:S1157|squid:S1158|squid:S1160|squid:S1161|squid:S1163|squid:S1165|squid:S1166|squid:S1168|squid:S1170|squid:S1171|squid:S1172|squid:S1174|squid:S1181|squid:S1185|squid:S1186|squid:S1188|squid:S1190|squid:S1191|squid:S1192|squid:S1193|squid:S1194|squid:S1195|squid:S1197|squid:S1199|squid:S1213|squid:S1214|squid:S1215|squid:S1219|squid:S1220|squid:S1223|squid:S1226|squid:S128|squid:S1301|squid:S1312|squid:S1314|squid:S1319|squid:S134|squid:S135|squid:S1452|squid:S1479|squid:S1481|squid:S1488|squid:S1596|squid:S1598|squid:S1700|squid:S1905|squid:S1994|squid:S2065|squid:S2094|squid:S2130|squid:S2131|squid:S2133|squid:S2160|squid:S2165|squid:S2166|squid:S2176|squid:S2178|squid:S2232|squid:S2235|squid:S2250|squid:S2274|squid:S2326|squid:S2388|squid:S2437|squid:S2438|squid:S2440|squid:S2442|squid:S2447|squid:S888|squid:SwitchLastCaseIsDefaultCheck|squid:UnusedPrivateMethod|squid:UselessImportCheck|squid:UselessParenthesesCheck
+org.apache:cayenne|b9988a83e364b9b470873dff8996dcf401d08dc4|2008-07-07 14:52:05+00:00|Andrus Adamchik|AWedEXD3C4KKKThcCqHV|223271|0|0|1|1|1|0|1|0|0|338446|37990|376436|2|12790|1023|338446|37990|376436|1269|419002|50447|469449|26|3040|749|3789|30|3334|754|4088|2|12790|834|321460|31890|353350|1038|398667|44220|442887|18|729|158|887|21|1019|162|1181|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0|0
 ```
 
 ## Generate Auxillary Tables
