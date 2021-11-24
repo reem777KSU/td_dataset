@@ -48,10 +48,40 @@ and `td_V2.db` is a copy of the database containing the
 Generated tables are checked into this workspace as `.csv` files at
 `<repo dir>/generated_tables/<TABLE_NAME>[-<part>_of_<parts>].csv`.
 ### COMMIT_TIME_DIFFS
-`COMMIT_TIME_DIFFS` is a denormalization of the tables `SONAR_ISSES`,
+`COMMIT_TIME_DIFFS` is a denormalization of the tables `SONAR_ISSUES`,
 `SONAR_ANALYSIS`, and `GIT_COMMITS`.  It agreggates information regarding the
 introduction and, if available, resolution of [SonarQube](https://www.sonarqube.org/)
-code smells.
+code smells.  There is one `COMMIT_TIME_DIFFS` row for every SonarQube code
+smell in `SONAR_ISSUES`:
+```
+sqlite> SELECT COUNT(*)
+          FROM COMMIT_TIME_DIFFS;
+732114
+sqlite> SELECT COUNT(*)
+          FROM (SELECT ISSUE_KEY
+                  FROM COMMIT_TIME_DIFFS
+                 UNION 
+                SELECT ISSUE_KEY
+                  FROM SONAR_ISSUES
+                 WHERE TYPE = "CODE_SMELL" AND
+                       (RULE =    "common-java" OR
+                        RULE LIKE "squid:%"));
+742241
+```
+The missing entries in `COMMIT_TIME_DIFFS` can be attributed to an error in the
+original database where not all `SONAR_ISSUE`s point to a `SONAR_ANALYSIS`
+through `CREATION_ANALYSIS_KEY`:
+```
+sqlite>    SELECT COUNT(*)
+             FROM SONAR_ISSUES
+        LEFT JOIN SONAR_ANALYSIS
+               ON CREATION_ANALYSIS_KEY = ANALYSIS_KEY
+            WHERE ANALYSIS_KEY IS NULL AND
+                  TYPE = "CODE_SMELL"  AND
+                  (RULE =    "common-java" OR
+                   RULE LIKE "squid:%"));
+10127
+```
 
 Note that nullable columns are `NULL` where their row corresponds a code smell
 (`ISSUE_KEY`) that has not been resolved.
@@ -63,7 +93,7 @@ CREATE TABLE IF NOT EXISTS COMMIT_TIME_DIFFS (
         -- Foreign key to 'SONAR_ISSUES'.
 
     RULE                  TEXT NOT NULL,
-        -- Kind of sonar qube code smell.
+        -- Kind of SonarQube code smell.
 
     CREATION_ANALYSIS_KEY TEXT NOT NULL,
     CLOSE_ANALYSIS_KEY    TEXT,
@@ -109,7 +139,7 @@ Sample row:
 ```
 $ sqlite3 -header td_V2.db 'SELECT * FROM COMMIT_TIME_DIFFS LIMIT 1;'
 ISSUE_KEY|RULE|CREATION_ANALYSIS_KEY|CLOSE_ANALYSIS_KEY|CREATION_DATE|CLOSE_DATE|DAY_DIFF|HOURS_DIFF|CREATION_COMMIT_HASH|CLOSE_COMMIT_HASH|CREATION_AUTHOR|FIX_AUTHOR|PROJECT_ID|SOURCE_FILE
-AV0-0YGZt6tne_r58pS_|squid:HiddenFieldCheck|AV0-0TCKt6tne_r58pS9|AWOg5EgxpsrLjol6S0Fr|2012-03-16 14:57:47|2014-11-07 01:33:53|965|23160|6f88da3061babf49953161012006852e44113722|30570912d4f6be8079c869540a7628f94838f7a5|Ashutosh Chauhan|Ashutosh Chauhan|org.apache:hive|service/src/test/org/apache/hadoop/hive/service/TestHiveServerSessions.java 
+AV0-0YGZt6tne_r58pS_|squid:HiddenFieldCheck|AV0-0TCKt6tne_r58pS9|AWOg5EgxpsrLjol6S0Fr|2012-03-16 14:57:47|2014-11-07 01:33:53|965|23160|6f88da3061babf49953161012006852e44113722|30570912d4f6be8079c869540a7628f94838f7a5|Ashutosh Chauhan|Ashutosh Chauhan|org.apache:hive|service/src/test/org/apache/hadoop/hive/service/TestHiveServerSessions.java
 ```
 ### AUTHOR_PROJECT_COMMITS
 Records the total number of `COMMITS` that an `AUTHOR` has contributed to a
@@ -134,7 +164,7 @@ CREATE TABLE IF NOT EXISTS AUTHOR_PROJECT_COMMITS (
 
     SOURCE_FILE_COMMITS INTEGER NOT NULL,
         -- Total number of commits 'AUTHOR' has contributed to files which are
-        -- targeted by sonar qube code smell rules (java files).
+        -- targeted by SonarQube code smell rules (java files).
 
     FIRST_COMMIT_DATE TEXT      NOT NULL,
         -- Date (YYYY-MM-DD HH:MM:SS) of the author's first commit to this
@@ -147,7 +177,7 @@ Sample row:
 ```
 $ sqlite3 -header td_V2.db 'SELECT * FROM AUTHOR_PROJECT_COMMITS LIMIT 1;'
 AUTHOR|PROJECT_ID|COMMITS|SOURCE_FILE_COMMITS|FIRST_COMMIT_DATE
-Olivier Lamy|org.apache:archiva|4152|1689|2011-05-10 20:00:55 
+Olivier Lamy|org.apache:archiva|4152|1689|2011-05-10 20:00:55
 ```
 ### AUTHOR_PROJECT_SOURCE_FILE_CHANGES
 Records the total kinds of changes that an `AUTHOR` has contributed to a (java)
@@ -254,7 +284,7 @@ CREATE TABLE IF NOT EXISTS AUTHOR_EXPERIENCE (
         -- 'SONAR_MEASURES').
 
     SQALE_INDEX                                 INTEGER NOT NULL,
-        -- Sonar qube measure of project-wide technical debt after
+        -- SonarQube measure of project-wide technical debt after
         -- this commit.
 
     IS_FAULT_INDUCING                           INTEGER NOT NULL,
@@ -350,7 +380,7 @@ CREATE TABLE IF NOT EXISTS PROJECT_STATS (
         -- Total number of files (any kind).
 
     SOURCE_FILES        INTEGER NOT NULL,
-        -- Total number of files that are targeted by sonar qube code smell
+        -- Total number of files that are targeted by SonarQube code smell
         -- rules (java files).
 
     LINES               INTEGER NOT NULL,
@@ -380,16 +410,16 @@ as stats that describe the state of the project at the time of the commit.
 Schema:
 ```
 CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATS (
-    PROJECT_ID                              TEXT              NOT NULL, 
+    PROJECT_ID                              TEXT              NOT NULL,
         -- The project.
 
-    COMMIT_HASH                             TEXT              NOT NULL, 
+    COMMIT_HASH                             TEXT              NOT NULL,
         -- The commit.
 
-    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 
+    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL,
         -- Date of 'COMMIT_HASH'.
 
-    AUTHOR                                  TEXT    DEFAULT "" NOT NULL, 
+    AUTHOR                                  TEXT    DEFAULT "" NOT NULL,
         -- Author of 'COMMIT_HASH'.
 
     NUM_FILES                               INTEGER DEFAULT 0  NOT NULL,
@@ -410,7 +440,7 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATS (
 
     NUM_SOURCE_FILES                        INTEGER DEFAULT 0  NOT NULL,
         -- Total number of files touched in 'COMMIT_HASH' that are targeted by
-        -- sonar qube code smell rules (java files).
+        -- SonarQube code smell rules (java files).
 
     NUM_SOURCE_DIRECTORIES                  INTEGER DEFAULT 0  NOT NULL,
         -- Number of unique directories containing source (java) files touched
@@ -516,22 +546,39 @@ org.apache:archiva|005800c3403199937c105999523a0225bd73a1f1|2006-05-30 06:38:12+
 ```
 ```
 ### PROJECT_COMMIT_RULE_VIOLATIONS
-`PROJECT_COMMIT_RULE_VIOLATIONS` summarizes the number of sonar qube code smell
-violations that were introduced in a commit, by rule.
+`PROJECT_COMMIT_RULE_VIOLATIONS` summarizes the number of SonarQube code smell
+violations that were introduced in a commit, by rule.  There is an entry in
+`PROJECT_COMMIT_RULE_VIOLATIONS` for every commit in `GIT_COMMITS` where a
+`SONAR_ANALYSIS` was executed:
+```
+sqlite> SELECT COUNT(*)
+        FROM PROJECT_COMMIT_RULE_VIOLATIONS; 
+66711 
+sqlite> SELECT COUNT(*)
+          FROM (    SELECT PROJECT_ID, COMMIT_HASH
+                      FROM PROJECT_COMMIT_RULE_VIOLATIONS
+                     UNION
+                    SELECT GIT_COMMITS.PROJECT_ID, COMMIT_HASH
+                      FROM GIT_COMMITS
+                INNER JOIN SONAR_ANALYSIS
+                     WHERE GIT_COMMITS.PROJECT_ID = SONAR_ANALYSIS.PROJECT_ID AND
+                           COMMIT_HASH            = REVISION);
+67550 -- TODO: correct or explain descrepancy
+```
 
 Schema:
 ```
 CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
-    PROJECT_ID                              TEXT              NOT NULL, 
+    PROJECT_ID                              TEXT              NOT NULL,
         -- The project.
 
-    COMMIT_HASH                             TEXT              NOT NULL, 
+    COMMIT_HASH                             TEXT              NOT NULL,
         -- The commit.
 
-    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL, 
+    COMMIT_DATE                             TEXT    DEFAULT "" NOT NULL,
         -- Date of 'COMMIT_HASH'.
 
-    AUTHOR                                  TEXT    DEFAULT "" NOT NULL, 
+    AUTHOR                                  TEXT    DEFAULT "" NOT NULL,
         -- Author of 'COMMIT_HASH'.
 
     ANALYSIS_KEY                            TEXT              NOT NULL,
@@ -539,7 +586,7 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
         -- 'SONAR_MEASURES').
 
     SQALE_INDEX                             INTEGER           NOT NULL,
-        -- Sonar qube measure of project-wide technical debt after
+        -- SonarQube measure of project-wide technical debt after
         -- 'COMMIT_HASH'.
 
     IS_FAULT_INDUCING                           INTEGER NOT NULL,
@@ -666,7 +713,7 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
     -- The following columns count the number of sonar qube violations --
     -- introduced in this commit by rule (column name).                --
     ---------------------------------------------------------------------
-        
+
     `squid:AssignmentInSubExpressionCheck`  INTEGER DEFAULT 0 NOT NULL,
     `squid:ClassCyclomaticComplexity`       INTEGER DEFAULT 0 NOT NULL,
     `squid:CommentedOutCodeLine`            INTEGER DEFAULT 0 NOT NULL,
