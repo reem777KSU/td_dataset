@@ -5,6 +5,11 @@ This repository contains tools and notes for directed research based on
 ## Overview
 - [Prerequisites](#Prerequisites)
 - [Set Up Workspace](#set-up-workspace)
+- [Label Glossary](#label-glossary)
+    - [Author](#author)
+    - [Recent Commits](#recent-commits)
+    - [Source File](#source-file)
+    - [Total](#total)
 - [Auxillary Tables](#auxillary-tables)
     - [`COMMIT_TIME_DIFFS`](#commit_time_diffs)
     - [`AUTHOR_PROJECT_COMMITS`](#author_project_commits)
@@ -43,6 +48,47 @@ where `td_V2-initial.db` is an original copy of the
 and `td_V2.db` is a copy of the database containing the
 [auxillary tables](#auxillary-tables) imported from
 `<repo dir>/generated_tables/<TABLE_NAME>[-<part>_of_<parts>].csv`.
+
+## Label Glossary
+The names of many table and column names include labels that classify the data
+that they describe.  Below is a list of reoccurring labels and their
+definitions:
+### Author
+"Author" refers to the author of a git commit (`AUTHOR` field of `GIT_COMMITS`,
+as opposed to the person who committed the code on behalf of the original
+author (`COMMITTER` field of `GIT_COMMITS`).  Most of the time these are the
+same person.
+"Author" as a qualifying label targets objects (files, commits,
+etc...) that belong to the author of a reference commit.  For instance, a count
+of "author" line changes includes just the line changes contributed by a
+particular author.
+### Recent Commits
+"Recent" in the context of data collected from a pool of commits limits its
+pool to commits that were authored in the interval of 30 days prior to a
+reference commit and up until the time of the reference commit.  For instance,
+a count of the latest "recent" commits would not include commits from last year.
+### Source File
+A "source file" is a file with the ".java" extension.  A more complete
+definition is a file with a file extension that belongs to the set of all file
+extensions for which there is at least one associated SonarQube code smell
+violation:
+```
+sqlite> SELECT DISTINCT(REPLACE(COMPONENT, RTRIM(COMPONENT, REPLACE(COMPONENT, '.', '')), ''))
+          FROM SONAR_ISSUES
+         WHERE TYPE = 'CODE_SMELL' AND
+               (RULE =    'common-java' OR
+                RULE LIKE 'squid:%');
+java
+```
+Any time a label has "file" without the "source" qualifier the data associated
+with it has been collected from *all* files that have been checked into `git`.
+### Total
+"Total" is used to distinguish data from those labeled with "author".  Where
+"author" filters just the set of objects (files, commits, etc...) that belong
+to the author of a reference commit, "total" has no filter.  For instance, a
+count of "total" commits contributed to a project includes all commits, whereas
+a count of "author" commits would only include those contributed by a
+particular author.
 
 ## Auxillary Tables
 Generated tables are checked into this workspace as `.csv` files at
@@ -549,7 +595,7 @@ org.apache:archiva|005800c3403199937c105999523a0225bd73a1f1|2006-05-30 06:38:12+
 `PROJECT_COMMIT_RULE_VIOLATIONS` summarizes the number of SonarQube code smell
 violations that were introduced in a commit, by rule.  There is an entry in
 `PROJECT_COMMIT_RULE_VIOLATIONS` for every commit in `GIT_COMMITS` where a
-`SONAR_ANALYSIS` was executed:
+`SONAR_ANALYSIS` was executed and a corresponding `SONAR_MEASURES` is available:
 ```
 sqlite> SELECT COUNT(*)
         FROM PROJECT_COMMIT_RULE_VIOLATIONS; 
@@ -561,9 +607,11 @@ sqlite> SELECT COUNT(*)
                     SELECT GIT_COMMITS.PROJECT_ID, COMMIT_HASH
                       FROM GIT_COMMITS
                 INNER JOIN SONAR_ANALYSIS
-                     WHERE GIT_COMMITS.PROJECT_ID = SONAR_ANALYSIS.PROJECT_ID AND
-                           COMMIT_HASH            = REVISION);
-67550 -- TODO: correct or explain descrepancy
+                        ON GIT_COMMITS.PROJECT_ID = SONAR_ANALYSIS.PROJECT_ID AND
+                           COMMIT_HASH            = REVISION
+                INNER JOIN SONAR_MEASURES
+                        ON SONAR_ANALYSIS.ANALYSIS_KEY = SONAR_MEASURES.ANALYSIS_KEY);
+66711
 ```
 
 Schema:
@@ -842,8 +890,8 @@ org.apache:cayenne|b9988a83e364b9b470873dff8996dcf401d08dc4|2008-07-07 14:52:05+
 ```
 
 ## Generate Auxillary Tables
-Running the `mine.bash` script, followed by the `patch1.bash` and `patch2.bash`
-scripts (in that order), will produce the following directory structure:
+Running the `mine.bash` script, followed by the `patch<STEP>.bash` scripts (in
+`STEP` order), will produce the following directory structure:
 ```
 .
 |-- td_V2.db
