@@ -23,3 +23,12 @@ export_author_experience() {
 }
 
 export_author_experience
+
+for table in PROJECT_COMMIT_STATS PROJECT_COMMIT_RULE_VIOLATIONS
+do
+    sqlite3 -header -csv $DATABASE_PATH "
+          SELECT *
+            FROM $table
+        ORDER BY PROJECT_ID, COMMIT_HASH;
+    " > $THIS_SCRIPT_DIR/generated_tables/${table}.csv
+done
