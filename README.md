@@ -1,12 +1,13 @@
 # Technical Debt Dataset Workspace
-This repository contains tools and notes for directed research based on
+This repository contains tools and notes for directed research based on version 2.0 of
 [The Technical Debt Dataset](https://github.com/clowee/The-Technical-Debt-Dataset).
 
 ## Overview
 - [Prerequisites](#Prerequisites)
 - [Set Up Workspace](#set-up-workspace)
-- [Label Glossary](#label-glossary)
+- [Glossary](#glossary)
     - [Author](#author)
+    - [SonarQube Code Smells](#sonarqube-code-smells)
     - [Recent Commits](#recent-commits)
     - [Source File](#source-file)
     - [Total](#total)
@@ -49,10 +50,11 @@ and `td_V2.db` is a copy of the database containing the
 [auxillary tables](#auxillary-tables) imported from
 `<repo dir>/generated_tables/<TABLE_NAME>[-<part>_of_<parts>].csv`.
 
-## Label Glossary
+## Glossary
 The names of many table and column names include labels that classify the data
-that they describe.  Below is a list of reoccurring labels and their
-definitions:
+that they describe.  There are also terms used in this document that have
+precise meaning.  Below is a list of such reoccurring labels and terms, along
+with their definitions:
 ### Author
 "Author" refers to the author of a git commit (`AUTHOR` field of `GIT_COMMITS`,
 as opposed to the person who committed the code on behalf of the original
@@ -62,6 +64,25 @@ same person.
 etc...) that belong to the author of a reference commit.  For instance, a count
 of "author" line changes includes just the line changes contributed by a
 particular author.
+### SonarQube Code Smells
+We focus on a subset of the "code smells" identified by SonarQube in [The
+technical Debt Dataset](https://arxiv.org/pdf/1907.00376.pdf):
+
+> Table `SONAR_ISSUES` lists all of the SonarQube issues as well as the
+> anti-patterns and code smells detected by Ptidej. The value offield *squid*
+> of the issues detected by SonarQube starts with either the prefix `squid:` or
+> `common-java`
+
+Accordingly, the following `WHERE` condition may be applied to the
+`SONAR_ISSUES` table to select just the SonarQube code smells:
+
+```
+sqlite> SELECT *
+          FROM SONAR_ISSUES
+         WHERE TYPE = "CODE_SMELL" AND
+               (RULE =    "common-java" OR
+                RULE LIKE "squid:%"));
+```
 ### Recent Commits
 "Recent" in the context of data collected from a pool of commits limits its
 pool to commits that were authored in the interval of 30 days prior to a
@@ -403,6 +424,20 @@ CREATE TABLE IF NOT EXISTS AUTHOR_EXPERIENCE (
         -- Total commits to this project by 'AUTHOR' *within 30 days of*
         -- the time of the commit (excluding this commit).
 
+    NUM_PROJECT_FILES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of files in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_LINES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of lines in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_FILES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) files in the project at the time of
+        -- 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_LINES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) lines in the project at the time of
+        -- 'COMMIT_HASH'.
+
     PRIMARY KEY (ISSUE_KEY, IS_FIX)
 );
 ```
@@ -581,6 +616,20 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_STATS (
         -- 'AUTHOR' *within 30 days of* the time of 'COMMIT_HASH' (exluding
         -- 'COMMIT_HASH').
 
+    NUM_PROJECT_FILES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of files in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_LINES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of lines in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_FILES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) files in the project at the time of
+        -- 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_LINES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) lines in the project at the time of
+        -- 'COMMIT_HASH'.
+
     PRIMARY KEY (PROJECT_ID, COMMIT_HASH)
 );
 ```
@@ -756,6 +805,20 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
         -- Total number of commits, line additions/subtractions/changes by
         -- 'AUTHOR' *within 30 days of* the time of 'COMMIT_HASH' (exluding
         -- 'COMMIT_HASH').
+
+    NUM_PROJECT_FILES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of files in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_LINES        INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of lines in the project at the time of 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_FILES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) files in the project at the time of
+        -- 'COMMIT_HASH'.
+
+    NUM_PROJECT_SOURCE_LINES INTEGER DEFAULT 0 NOT NULL,
+        -- Total number of source (java) lines in the project at the time of
+        -- 'COMMIT_HASH'.
 
     ---------------------------------------------------------------------
     -- The following columns count the number of sonar qube violations --
