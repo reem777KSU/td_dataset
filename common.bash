@@ -216,11 +216,6 @@ run_query '
         AUTHOR_RECENT_PROJECT_LINE_SUBTRACTIONS     INTEGER NOT NULL, -- NEW
         AUTHOR_RECENT_PROJECT_LINE_CHANGES          INTEGER NOT NULL, -- NEW
 
-        NUM_PROJECT_FILES        INTEGER DEFAULT 0 NOT NULL,
-        NUM_PROJECT_LINES        INTEGER DEFAULT 0 NOT NULL,
-        NUM_PROJECT_SOURCE_FILES INTEGER DEFAULT 0 NOT NULL,
-        NUM_PROJECT_SOURCE_LINES INTEGER DEFAULT 0 NOT NULL,
-
         `squid:AssignmentInSubExpressionCheck`  INTEGER DEFAULT 0  NOT NULL,
         `squid:ClassCyclomaticComplexity`       INTEGER DEFAULT 0  NOT NULL,
         `squid:CommentedOutCodeLine`            INTEGER DEFAULT 0  NOT NULL,
@@ -338,6 +333,12 @@ run_query '
         `squid:UnusedPrivateMethod`             INTEGER DEFAULT 0  NOT NULL,
         `squid:UselessImportCheck`              INTEGER DEFAULT 0  NOT NULL,
         `squid:UselessParenthesesCheck`         INTEGER DEFAULT 0  NOT NULL,
+
+        NUM_PROJECT_FILES        INTEGER DEFAULT 0 NOT NULL,
+        NUM_PROJECT_LINES        INTEGER DEFAULT 0 NOT NULL,
+        NUM_PROJECT_SOURCE_FILES INTEGER DEFAULT 0 NOT NULL,
+        NUM_PROJECT_SOURCE_LINES INTEGER DEFAULT 0 NOT NULL,
+
         PRIMARY KEY (PROJECT_ID, COMMIT_HASH)
     );
 '

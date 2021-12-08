@@ -942,6 +942,7 @@ CREATE TABLE IF NOT EXISTS PROJECT_COMMIT_RULE_VIOLATIONS (
     `squid:UnusedPrivateMethod`             INTEGER DEFAULT 0 NOT NULL,
     `squid:UselessImportCheck`              INTEGER DEFAULT 0 NOT NULL,
     `squid:UselessParenthesesCheck`         INTEGER DEFAULT 0 NOT NULL,
+
     PRIMARY KEY (PROJECT_ID, COMMIT_HASH)
 );
 ```
